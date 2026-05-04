@@ -62,3 +62,15 @@ export async function postApiWithParam(url, payload, header) {
     },
   });
 }
+
+export async function putApi(url, payload, header) {
+  console.log('PutApi: ', `${constants.BASE_URL}/${url}`, payload);
+
+  return await axios.put(`${constants.BASE_URL}/${url}`, payload, {
+    headers: {
+      Accept: header.Accept,
+      'Content-Type': header.contenttype,
+      'Authorization': header.accesstoken,
+    },
+  });
+}

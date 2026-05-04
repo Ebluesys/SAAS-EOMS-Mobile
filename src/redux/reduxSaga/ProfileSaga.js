@@ -80,7 +80,7 @@ export function* userDetailsSaga(action) {
     accesstoken: items?.getTokenResponse,
   };
   try {
-    let response = yield call(getApi, 'user_profile_info_emp', header);
+    let response = yield call(getApi, 'auth/getUserProfile', header);
 
     if (response?.data?.meta?.code == 200) {
       yield put(userDetailsSuccess(response?.data?.data));
@@ -106,9 +106,10 @@ export function* attendenceStatusSaga(action) {
     Accept: 'application/json',
     contenttype: 'application/json',
     accesstoken: items?.getTokenResponse,
+    'device-id': 'v27',
   };
   try {
-    let response = yield call(getApi, 'user_attendance_info', header);
+    let response = yield call(getApi, `attendance/today-status?date=${action.payload ?? ''}`, header);
 
     if (response?.data?.meta?.code == 200) {
       yield put(attendenceStatusSuccess(response?.data?.data));
@@ -139,7 +140,7 @@ export function* clockinSaga(action) {
       accesstoken: items?.getTokenResponse,
     };
 
-    const response = yield call(postApi, 'check_in', action.payload, Header);
+    const response = yield call(postApi, 'attendance/clock-in', action.payload, Header);
     if (response?.data?.meta?.code == 200) {
       yield put(clockinSuccess(response?.data?.data));
       // showErrorAlert(response?.data?.meta?.message);
@@ -165,7 +166,7 @@ export function* clockoutSaga(action) {
       accesstoken: items?.getTokenResponse,
     };
 
-    const response = yield call(postApi, 'check_out', action.payload, Header);
+    const response = yield call(postApi, 'attendance/clock-out', action.payload, Header);
     console.log('response>>>>>>>>>', response);
 
     if (response?.data?.meta?.code == 200) {
@@ -193,8 +194,8 @@ export function* profileupdateSaga(action) {
     };
 
     const response = yield call(
-      postApi,
-      'user_profile_update',
+      putApi,
+      'auth/updateUserProfile',
       action.payload,
       Header,
     );
@@ -328,7 +329,7 @@ export function* applyleaveSaga(action) {
       accesstoken: items?.getTokenResponse,
     };
 
-    const response = yield call(postApi, 'apply_leave', action.payload, Header);
+    const response = yield call(postApi, 'leave/apply', action.payload, Header);
 
     if (response?.data?.meta?.code == 200) {
       yield put(applyLeaveSuccess(response?.data?.data));
@@ -432,7 +433,7 @@ export function* leaveTypeListSaga(action) {
   try {
     let response = yield call(
       getApi,
-      `get_leave_types/${action.payload}`,
+      `leave-types/active`,
       header,
     );
 
@@ -523,7 +524,7 @@ export function* cancelLeaveSaga(action) {
 
     const response = yield call(
       postApiWithParam,
-      `leave_cancel_emp`,
+      `leave-cancel/${action.payload}`,
       action.payload,
       Header,
     );
@@ -622,34 +623,68 @@ export function* endTaskSaga(action) {
     // showErrorAlert(error?.response?.data?.meta?.message);
   }
 }
+// export function* attendenceReportSaga(action) {
+//   let items = yield select(getItem);
+
+//   try {
+//     let Header = {
+//       Accept: 'application/json',
+//       contenttype: 'application/json',
+//       accesstoken: items?.getTokenResponse,
+//       'device-id': 'v27',
+//     };
+
+//     const response = yield call(
+//       postApi,
+//       'attendance/summary/',
+//       action.payload,
+//       Header,
+//     );
+//     if (response?.data?.meta?.code == 200) {
+//       yield put(attendenceReportSuccess(response?.data?.data));
+//       showErrorAlert(response?.data?.meta?.message);
+//     } else {
+//       yield put(attendenceReportFailure(response?.data?.data));
+//       showErrorAlert(response?.data?.meta?.message);
+//     }
+//   } catch (error) {
+//     yield put(attendenceReportFailure(error?.response?.data));
+//     // showErrorAlert(error?.response?.data?.meta?.message);
+//   }
+// }
+
+
 export function* attendenceReportSaga(action) {
   let items = yield select(getItem);
 
+  let header = {
+    Accept: 'application/json',
+    contenttype: 'application/json',
+    accesstoken: items?.getTokenResponse,
+    'device-id': 'v27',
+  };
   try {
-    let Header = {
-      Accept: 'application/json',
-      contenttype: 'application/json',
-      accesstoken: items?.getTokenResponse,
-    };
+    let response = yield call(getApi, 'attendance/summary', header);
 
-    const response = yield call(
-      postApi,
-      'getUserAttendance',
-      action.payload,
-      Header,
-    );
     if (response?.data?.meta?.code == 200) {
       yield put(attendenceReportSuccess(response?.data?.data));
+    } else if (response?.data?.meta?.code == 404) {
+      yield put(attendenceReportSuccess(response?.data?.meta));
       showErrorAlert(response?.data?.meta?.message);
     } else {
-      yield put(attendenceReportFailure(response?.data?.data));
+      yield put(attendenceReportFailure(response?.data));
       showErrorAlert(response?.data?.meta?.message);
     }
   } catch (error) {
     yield put(attendenceReportFailure(error?.response?.data));
-    // showErrorAlert(error?.response?.data?.meta?.message);
+    if (error?.response?.data?.meta?.message == 'Token is invalid or expired') {
+      yield call(AsyncStorage.removeItem, constants.TOKEN);
+      yield put(getTokenSuccess(null));
+      yield put(logoutSuccess());
+    }
   }
 }
+
 export function* taskDoItLaterSaga(action) {
   let items = yield select(getItem);
 
@@ -690,7 +725,7 @@ export function* holidayListSaga(action) {
   try {
     let response = yield call(
       getApi,
-      `get-holiday-list?municipalityId=${action.payload}`,
+      `holidays`,
       header,
     );
 

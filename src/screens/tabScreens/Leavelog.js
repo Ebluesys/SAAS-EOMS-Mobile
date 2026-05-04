@@ -20,7 +20,6 @@ import Modal from 'react-native-modal';
 import connectionrequest from '../../utils/helpers/NetInfo';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  applyLeaveRequest,
   leaveCancelRequest,
   leaveLogRequest,
   remainingLeavesRequest,

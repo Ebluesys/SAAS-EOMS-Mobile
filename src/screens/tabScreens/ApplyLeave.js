@@ -24,7 +24,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   applyLeaveRequest,
   holidayListRequest,
-  remainingLeavesRequest,
+  leaveTypeRequest,
 } from '../../redux/reducer/ProfileReducer';
 import Loader from '../../utils/helpers/Loader';
 import { Dropdown } from 'react-native-element-dropdown';
@@ -62,12 +62,10 @@ const ApplyLeave = () => {
       connectionrequest()
         .then(() => {
           dispatch(
-            remainingLeavesRequest(ProfileReducer?.userDetailsResponse?.id),
+            leaveTypeRequest(),
+            holidayListRequest(),
           );
 
-          dispatch(
-            holidayListRequest(130),
-          );
         })
         .catch(err => {
           console.log(err);
@@ -281,7 +279,7 @@ const ApplyLeave = () => {
       const formData = new FormData();
       formData.append('start_date', formatDate(startDate));
       formData.append('end_date', formatDate(endDate));
-      formData.append('leave_gov_type', selectedLeaveTypeId);
+      formData.append('leave_type_id', selectedLeaveTypeId);
       formData.append('reason', reason);
       formData.append('app_version', constants.APP_VERSION);
       supportingDocument?.uri != undefined &&

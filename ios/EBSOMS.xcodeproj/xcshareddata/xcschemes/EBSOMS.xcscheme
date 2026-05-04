@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "ebsAttendence.app"
-               BlueprintName = "ebsAttendence"
-               ReferencedContainer = "container:ebsAttendence.xcodeproj">
+               BuildableName = "ebsOMS.app"
+               BlueprintName = "ebsOMS"
+               ReferencedContainer = "container:ebsOMS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "ebsAttendenceTests.xctest"
-               BlueprintName = "ebsAttendenceTests"
-               ReferencedContainer = "container:ebsAttendence.xcodeproj">
+               BuildableName = "ebsOMSTests.xctest"
+               BlueprintName = "ebsOMSTests"
+               ReferencedContainer = "container:ebsOMS.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "ebsAttendence.app"
-            BlueprintName = "ebsAttendence"
-            ReferencedContainer = "container:ebsAttendence.xcodeproj">
+            BuildableName = "ebsOMS.app"
+            BlueprintName = "ebsOMS"
+            ReferencedContainer = "container:ebsOMS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "ebsAttendence.app"
-            BlueprintName = "ebsAttendence"
-            ReferencedContainer = "container:ebsAttendence.xcodeproj">
+            BuildableName = "ebsOMS.app"
+            BlueprintName = "ebsOMS"
+            ReferencedContainer = "container:ebsOMS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

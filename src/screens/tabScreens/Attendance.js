@@ -20,10 +20,8 @@ import moment from 'moment';
 import connectionrequest from '../../utils/helpers/NetInfo';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  addTaskRequest,
   clockinRequest,
   clockoutRequest,
-  municipalityRegisterRequest,
 } from '../../redux/reducer/ProfileReducer';
 import Loader from '../../utils/helpers/Loader';
 import constants from '../../utils/helpers/constants';
@@ -50,7 +48,6 @@ const Attendence = props => {
   const latitude = props?.route.params?.latitude;
   const longitude = props?.route.params?.longitude;
   const attendenceStatus = props?.route?.params?.attendenceStatus;
-console.log("attendenceStatus>>>",attendenceStatus);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -133,14 +130,11 @@ console.log("attendenceStatus>>>",attendenceStatus);
     const imageName = capturedimage.split('/').pop();
     const imageType = 'image/jpeg';
     const formData = new FormData();
-    // formData.append('app_version', constants.APP_VERSION);
     formData.append('check_in', moment().format('HH:mm:ss'));
-    // formData.append('status', attendenceStatus);
-    formData.append('check_in_latitude', latitude);
-    formData.append('check_in_longitude', longitude);
-    // formData.append('check_in_address', locationData?.address);
-    // formData.append('remarks', isInsideOffice);
-    formData.append('check_in_photo', {
+    formData.append('latitude', latitude);
+    formData.append('longitude', longitude);
+    formData.append('method', 'gps');
+    formData.append('check_in_picture', {
       uri:
         Platform.OS === 'android'
           ? capturedimage
@@ -163,11 +157,10 @@ console.log("attendenceStatus>>>",attendenceStatus);
     const imageType = 'image/jpeg';
     const formData = new FormData();
     formData.append('check_out', moment().format('HH:mm:ss'));
-    formData.append('check_out_latitude', latitude);
-    formData.append('check_out_longitude', longitude);
-    // formData.append('check_out_address', "test");
-    // formData.append('check_out_remarks', check_out_remarks);
-    formData.append('check_out_photo', {
+    formData.append('latitude', latitude);
+    formData.append('longitude', longitude);
+    formData.append('method', 'gps');
+    formData.append('check_out_picture', {
       uri:
         Platform.OS === 'android'
           ? capturedimage

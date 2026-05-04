@@ -34,25 +34,25 @@ export function* signinSaga(action) {
   try {
     let response = yield call(
       postApi,
-      'loginForApp',
+      'auth/loginForApp',
       action.payload,
       header,
     );
     console.log('LOGIN_response>>>', response);
-    // if (response?.data?.meta?.code == 200) {
-    //   yield put(signInSuccess(response?.data?.data));
-    //   ShowMessage(response?.data?.meta?.message, 'success');
+    if (response?.data?.meta?.code == 200) {
+      yield put(signInSuccess(response?.data?.data));
+      ShowMessage(response?.data?.meta?.message, 'success');
 
-    //   yield call(
-    //     AsyncStorage.setItem,
-    //     constants.TOKEN,
-    //     response?.data?.data?.token,
-    //   );
-    //   yield put(getTokenSuccess(response?.data?.data?.token));
-    // } else {
-    //   yield put(signInFailure(response?.data?.data));
-    //   ShowMessage(response?.data?.meta?.message, 'error');
-    // }
+      yield call(
+        AsyncStorage.setItem,
+        constants.TOKEN,
+        response?.data?.data?.token,
+      );
+      yield put(getTokenSuccess(response?.data?.data?.token));
+    } else {
+      yield put(signInFailure(response?.data?.data));
+      ShowMessage(response?.data?.meta?.message, 'error');
+    }
   } catch (error) {
     yield put(signInFailure(error));
   }
