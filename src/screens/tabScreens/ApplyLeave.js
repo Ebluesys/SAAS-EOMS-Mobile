@@ -1,21 +1,20 @@
 import {
   Alert,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   PermissionsAndroid,
   Platform,
+  Switch,
 } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import moment from 'moment';
-import Header from '../../components/Header';
 import { Colors, Fonts, Images } from '../../themes/ThemePath';
 import showErrorAlert from '../../utils/helpers/Toast';
-import TextInputWithButton from '../../components/TextInputWithBotton';
 import DatePicker from 'react-native-date-picker';
 import normalize from '../../utils/helpers/normalize';
 import Modal from 'react-native-modal';
@@ -34,621 +33,448 @@ import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import MessageModal from '../../components/MessageModal';
 
 let status = '';
+
+const PURPLE       = '#5B52F0';
+const PURPLE_DARK  = '#4740D4';
+const PURPLE_LIGHT = '#EBEBFF';
+const PURPLE_MID   = '#C7C4FF';
+const GREEN        = '#22A06B';
+const GREEN_LIGHT  = '#E3F9EE';
+const GREEN_BORDER = '#6BCB9A';
+const BORDER       = '#B8C0CC';      // ← much darker default border
+const BORDER_FOCUS = PURPLE;
+const TEXT_DARK    = '#1A1F36';
+const TEXT_MID     = '#4A5568';
+const TEXT_MUTED   = '#8898AA';
+const BG           = '#F0F2F8';
+const CARD         = '#FFFFFF';
+
 const ApplyLeave = () => {
   const dispatch = useDispatch();
   const ProfileReducer = useSelector(state => state.ProfileReducer);
-
   const isFocused = useIsFocused();
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
+
+  const [startDate, setStartDate]               = useState(new Date());
+  const [endDate, setEndDate]                   = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [leaveType, setLeaveType] = useState([]);
-  const [isFocusTask, setIsFocusTask] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker]     = useState(false);
+  const [leaveType, setLeaveType]               = useState([]);
+  const [isFocusTask, setIsFocusTask]           = useState(false);
   const [selectedLeaveTypeId, setSelectedLeaveTypeId] = useState(null);
   const [selectedLeaveTypeName, setSelectedLeaveTypeName] = useState('');
-  const [reason, setReason] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reason, setReason]                     = useState('');
+  const [reasonFocused, setReasonFocused]       = useState(false);
+  const [isSubmitting, setIsSubmitting]         = useState(false);
   const [isHolidayVisible, setIsHolidayVisible] = useState(false);
-  const [holidays, setHolidays] = useState([]);
+  const [holidays, setHolidays]                 = useState([]);
   const [supportingDocument, setSupportingDocument] = useState(null);
-  console.log('leaveType>>>>>>>>>', leaveType);
   const [showMessageModal, setShowMessageModal] = useState(false);
-
-  const [showFileOptions, setShowFileOptions] = useState(false);
+  const [showFileOptions, setShowFileOptions]   = useState(false);
+  const [isHalfDay, setIsHalfDay]               = useState(false);
+  const [halfDayPeriod, setHalfDayPeriod]       = useState('first');
 
   useEffect(() => {
     if (isFocused) {
       connectionrequest()
-        .then(() => {
-          dispatch(
-            leaveTypeRequest(),
-            holidayListRequest(),
-          );
-
-        })
-        .catch(err => {
-          console.log(err);
-          showErrorAlert('Please connect to internet');
-        });
+        .then(() => { dispatch(leaveTypeRequest()); dispatch(holidayListRequest()); })
+        .catch(() => showErrorAlert('Please connect to internet'));
     }
   }, [isFocused]);
 
-  // Add this useEffect to format the leave type data when it's received
   useEffect(() => {
-    if (ProfileReducer?.remainingLeavesResponse?.leaves?.length > 0) {
-      const formattedLeaveTypes =
-        ProfileReducer?.remainingLeavesResponse?.leaves.map(leave => ({
-          ...leave,
-          formatted_label: `${leave.leave_type_name}`,
-        }));
-      setLeaveType(formattedLeaveTypes);
+    if (ProfileReducer?.leaveTypeResponse?.length > 0) {
+      setLeaveType(
+        ProfileReducer.leaveTypeResponse.map(l => ({ ...l, formatted_label: l.name }))
+      );
     }
-  }, [ProfileReducer?.remainingLeavesResponse]);
+  }, [ProfileReducer?.leaveTypeResponse]);
 
-  // Optional: Add custom render item for dropdown if you want more styling control
+  useEffect(() => { if (isHalfDay) setEndDate(startDate); }, [isHalfDay]);
+
+  /* ─── Dropdown item renderer ─────────────────────────────────────── */
   const renderDropdownItem = item => {
-    const isLowBalance = parseInt(item.remaining_leaves) <= 2;
-    const isNoBalance = parseInt(item.remaining_leaves) === 0;
+    const remaining = parseInt(item.remaining_leaves ?? item.max_days_per_year ?? 0);
+    const total     = parseInt(item.max_days_per_year ?? 0);
+    const isNo  = remaining === 0;
+    const isLow = remaining <= 2 && !isNo;
 
     return (
-      <View style={styles.dropdownItem}>
-        <Text
-          style={[
-            styles.dropdownItemText,
-            isNoBalance && styles.noBalanceText,
-            isLowBalance && !isNoBalance && styles.lowBalanceText,
-          ]}
-        >
-          {item.leave_type_name}
-        </Text>
-        <Text
-          style={[
-            styles.balanceText,
-            isNoBalance && styles.noBalanceText,
-            isLowBalance && !isNoBalance && styles.lowBalanceText,
-          ]}
-        >
-          ({item.remaining_leaves} remaining out of {item.total_leaves})
-        </Text>
+      <View style={s.ddItem}>
+        <View style={s.ddItemLeft}>
+          <View style={[s.colorDot, { backgroundColor: item.color || PURPLE }]} />
+          <Text style={s.ddItemName}>{item.name}</Text>
+        </View>
+        <View style={[s.badge, isNo ? s.badgeRed : isLow ? s.badgeOrange : s.badgeGreen]}>
+          <Text style={[s.badgeTxt, isNo ? s.badgeRedTxt : isLow ? s.badgeOrangeTxt : s.badgeGreenTxt]}>
+            {remaining}/{total}
+          </Text>
+        </View>
       </View>
     );
   };
-  // Request camera permission
+
+  /* ─── Camera / gallery ────────────────────────────────────────────── */
   const requestCameraPermission = async () => {
     if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: 'Camera Permission',
-            message: 'App needs camera permission to take photos',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          },
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        console.warn(err);
-        return false;
-      }
+      const g = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA, {
+        title: 'Camera Permission', message: 'App needs camera permission',
+        buttonNeutral: 'Ask Me Later', buttonNegative: 'Cancel', buttonPositive: 'OK',
+      });
+      return g === PermissionsAndroid.RESULTS.GRANTED;
     }
     return true;
   };
 
-  // Handle file selection options
-  const handleFileOptions = () => {
-    setShowFileOptions(true);
-  };
-
-  // Handle camera option
   const handleCamera = async () => {
-    const hasPermission = await requestCameraPermission();
-    if (!hasPermission) {
-      showErrorAlert('Camera permission is required');
-      return;
-    }
-
-    const options = {
-      mediaType: 'photo',
-      quality: 0.7,
-      maxWidth: 1000,
-      maxHeight: 1000,
-    };
-
-    launchCamera(options, response => {
+    if (!(await requestCameraPermission())) { showErrorAlert('Camera permission required'); return; }
+    launchCamera({ mediaType: 'photo', quality: 0.7, maxWidth: 1000, maxHeight: 1000 }, res => {
       setShowFileOptions(false);
-      if (response.didCancel || response.errorMessage) {
-        return;
-      }
-      if (response.assets && response.assets[0]) {
-        setSupportingDocument(response.assets[0]);
-      }
+      if (!res.didCancel && !res.errorMessage && res.assets?.[0]) setSupportingDocument(res.assets[0]);
     });
   };
 
-  // Handle gallery option
   const handleGallery = () => {
-    const options = {
-      mediaType: 'mixed', // Allow both photos and videos
-      quality: 0.7,
-      maxWidth: 1000,
-      maxHeight: 1000,
-    };
-
-    launchImageLibrary(options, response => {
+    launchImageLibrary({ mediaType: 'mixed', quality: 0.7, maxWidth: 1000, maxHeight: 1000 }, res => {
       setShowFileOptions(false);
-      if (response.didCancel || response.errorMessage) {
-        return;
-      }
-      if (response.assets && response.assets[0]) {
-        setSupportingDocument(response.assets[0]);
-      }
+      if (!res.didCancel && !res.errorMessage && res.assets?.[0]) setSupportingDocument(res.assets[0]);
     });
   };
 
-  // Remove selected file
-  const removeFile = () => {
-    setSupportingDocument(null);
+  /* ─── Helpers ─────────────────────────────────────────────────────── */
+  const formatDate    = d => moment(d).format('YYYY-MM-DD');
+  const formatDisplay = d => moment(d).format('DD MMM YYYY');
+  const formatDay     = d => moment(d).format('ddd');
+
+  const leaveDays = () => {
+    if (isHalfDay) return 0.5;
+    return Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
   };
 
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.headerRow}>
-        <Text style={[styles.headerText, styles.nameColumn]}>Holiday Name</Text>
-        <Text style={[styles.headerText, styles.dateColumn]}>Date</Text>
-      </View>
-    </View>
-  );
-
-  const renderHolidayItem = ({ item, index }) => (
-    <View
-      style={[
-        styles.itemContainer,
-        index % 2 === 0 ? styles.evenRow : styles.oddRow,
-      ]}
-    >
-      <Text style={[styles.itemText, styles.nameColumn, styles.holidayName]}>
-        {item.holiday_name}
-      </Text>
-      <Text style={[styles.itemText, styles.dateColumn]}>
-        {moment(item?.holiday_date).format('YYYY-MM-DD')}
-      </Text>
-    </View>
-  );
-
-  const renderFooter = () => (
-    <View style={styles.footerContainer}>
-      <Text style={styles.footerText}>Total holidays: {holidays.length}</Text>
-    </View>
-  );
-
-  const formatDate = date => {
-    return moment(date).format('YYYY-MM-DD');
-  };
-
-  const formatDateForDisplay = date => {
-    return moment(date).format('DD/MM/YYYY');
-  };
-
-  const calculateLeaveDays = () => {
-    const timeDiff = endDate.getTime() - startDate.getTime();
-    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
-    return daysDiff;
-  };
-
-  const handleStartDateConfirm = selectedDate => {
+  const handleStartDateConfirm = d => {
     setShowStartDatePicker(false);
-    setStartDate(selectedDate);
-    if (selectedDate > endDate) {
-      setEndDate(selectedDate);
-    }
+    setStartDate(d);
+    if (d > endDate) setEndDate(d);
+    if (isHalfDay) setEndDate(d);
   };
 
-  const handleEndDateConfirm = selectedDate => {
+  const handleEndDateConfirm = d => {
     setShowEndDatePicker(false);
-    if (selectedDate >= startDate) {
-      setEndDate(selectedDate);
-    } else {
-      Alert.alert('Invalid Date', 'End date cannot be before start date');
-    }
+    if (d >= startDate) setEndDate(d);
+    else Alert.alert('Invalid Date', 'End date cannot be before start date');
   };
 
-  const handleStartDateCancel = () => {
-    setShowStartDatePicker(false);
-  };
-
-  const handleEndDateCancel = () => {
-    setShowEndDatePicker(false);
-  };
-
+  /* ─── Submit ──────────────────────────────────────────────────────── */
   function handleSubmit() {
-    const imageName = supportingDocument?.uri.split('/').pop();
-    const imageType = 'image/jpeg';
-    if (selectedLeaveTypeId == null) {
-      showErrorAlert('Please Select a valid leave Type.');
-    } else if (reason == '') {
-      showErrorAlert('Please describe reason for leave.');
-    } else if (
-      (selectedLeaveTypeId == 11 || selectedLeaveTypeId == 13) &&
-      !supportingDocument
-    ) {
-      showErrorAlert('Please upload supporting document.');
-    } else {
-      const formData = new FormData();
-      formData.append('start_date', formatDate(startDate));
-      formData.append('end_date', formatDate(endDate));
-      formData.append('leave_type_id', selectedLeaveTypeId);
-      formData.append('reason', reason);
-      formData.append('app_version', constants.APP_VERSION);
-      supportingDocument?.uri != undefined &&
-        formData.append('photo', {
-          uri:
-            Platform.OS === 'android'
-              ? supportingDocument?.uri
-              : supportingDocument?.uri.replace('file://', ''),
-          name: imageName,
-          type: imageType,
-        });
-      connectionrequest()
-        .then(() => {
-          dispatch(applyLeaveRequest(formData));
-        })
-        .catch(err => {
-          console.log(err);
-          showErrorAlert('Please connect to internet');
-        });
-    }
+    if (!selectedLeaveTypeId) { showErrorAlert('Please select a leave type.'); return; }
+    if (!reason.trim())       { showErrorAlert('Please add a reason for leave.'); return; }
+    if ((selectedLeaveTypeId == 11 || selectedLeaveTypeId == 13) && !supportingDocument)
+      { showErrorAlert('Please upload a supporting document.'); return; }
+
+    const obj = {
+      start_date:    formatDate(startDate),
+      end_date:      formatDate(endDate),
+      leave_type_id: selectedLeaveTypeId,
+      reason,
+      is_half_day:   isHalfDay ? 1 : 0,
+    };
+
+    connectionrequest()
+      .then(() => dispatch(applyLeaveRequest(obj)))
+      .catch(() => showErrorAlert('Please connect to internet'));
   }
 
-  // useEffect(() => {
-  //   if (ProfileReducer?.remainingLeavesResponse?.leaves?.length > 0) {
-  //     setLeaveType(ProfileReducer?.remainingLeavesResponse?.leaves);
-  //   }
-  // }, [ProfileReducer?.remainingLeavesResponse]);
-
-  if (status == '' || ProfileReducer.status != status) {
+  /* ─── Redux status handler ────────────────────────────────────────── */
+  if (status === '' || ProfileReducer.status !== status) {
     switch (ProfileReducer.status) {
-      case 'Profile/applyLeaveRequest':
-        status = ProfileReducer.status;
-        break;
+      case 'Profile/applyLeaveRequest':  status = ProfileReducer.status; break;
       case 'Profile/applyLeaveSuccess':
         status = ProfileReducer.status;
-        console.log('Hello>>>=applyLeaveSuccess=>>', ProfileReducer);
-
-        setStartDate(new Date());
-        setEndDate(new Date());
-        setSelectedLeaveTypeId(null);
-        setSelectedLeaveTypeName('');
-        setReason('');
-        setSupportingDocument(null); // Reset supporting document on success
+        setStartDate(new Date()); setEndDate(new Date());
+        setSelectedLeaveTypeId(null); setSelectedLeaveTypeName('');
+        setReason(''); setSupportingDocument(null); setIsHalfDay(false);
         break;
-      case 'Profile/applyLeaveFailure':
-        status = ProfileReducer.status;
-        console.log('Hello>>>=applyLeaveFailure=>>', ProfileReducer);
-
-        break;
-      case 'Profile/holidayListRequest':
-        status = ProfileReducer.status;
-        break;
+      case 'Profile/applyLeaveFailure':  status = ProfileReducer.status; break;
+      case 'Profile/holidayListRequest': status = ProfileReducer.status; break;
       case 'Profile/holidayListSuccess':
         status = ProfileReducer.status;
         setHolidays(ProfileReducer?.holidayListResponse);
         break;
-      case 'Profile/holidayListFailure':
-        status = ProfileReducer.status;
-        break;
+      case 'Profile/holidayListFailure': status = ProfileReducer.status; break;
     }
   }
 
+  const days = leaveDays();
+
+  /* ─── Render ──────────────────────────────────────────────────────── */
   return (
     <>
-      <Loader
-        visible={
-          ProfileReducer?.status == 'Profile/leaveTypeRequest' ||
-          ProfileReducer?.status == 'Profile/applyLeaveRequest'
-        }
-      />
-      <ScrollView
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 100,
-          paddingHorizontal: normalize(20),
-          paddingTop: normalize(20),
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => {
-            setIsHolidayVisible(!isHolidayVisible);
-          }}
-          style={{
-            backgroundColor: Colors.white,
-            padding: 5,
-            justifyContent: 'center',
-            alignItems: 'center',
-            alignSelf: 'flex-end',
-            borderRadius: 8,
-          }}
-        >
-          <Image
-            style={{ tintColor: Colors.skyblue, height: 30, width: 30 }}
-            source={Images.tab2}
-          />
-        </TouchableOpacity>
+      <Loader visible={
+        ProfileReducer?.status === 'Profile/leaveTypeRequest' ||
+        ProfileReducer?.status === 'Profile/applyLeaveRequest'
+      } />
 
-        {/* Start Date Section */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Start Date *</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowStartDatePicker(true)}
-          >
-            <Text style={styles.dateText}>
-              {formatDateForDisplay(startDate)}
-            </Text>
-            <Text style={styles.dateIcon}>📅</Text>
+      <ScrollView style={s.container} showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.scrollContent}>
+
+        {/* ── Header bar ─────────────────────────────────── */}
+        <View style={s.topBar}>
+          <View>
+            <Text style={s.screenTitle}>Apply Leave</Text>
+            <Text style={s.screenSub}>Submit a new leave request</Text>
+          </View>
+          <TouchableOpacity style={s.holidayBtn} onPress={() => setIsHolidayVisible(true)}>
+            <Text style={s.holidayBtnIcon}>🗓</Text>
+            <Text style={s.holidayBtnText}>Holidays</Text>
           </TouchableOpacity>
         </View>
 
-        {/* End Date Section */}
-        <View style={styles.section}>
-          <Text style={styles.label}>End Date *</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowEndDatePicker(true)}
-          >
-            <Text style={styles.dateText}>{formatDateForDisplay(endDate)}</Text>
-            <Text style={styles.dateIcon}>📅</Text>
-          </TouchableOpacity>
+        {/* ── Duration card ──────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>LEAVE DURATION</Text>
+
+          <View style={s.dateRow}>
+            <TouchableOpacity style={s.datePillFrom} onPress={() => setShowStartDatePicker(true)}>
+              <Text style={s.pillTag}>FROM</Text>
+              <Text style={s.pillDay}>{formatDay(startDate)}</Text>
+              <Text style={s.pillDate}>{formatDisplay(startDate)}</Text>
+            </TouchableOpacity>
+
+            <View style={s.pillMid}>
+              <View style={s.arrowLine} />
+              <View style={s.daysBubble}>
+                <Text style={s.daysBubbleTxt}>{days}{days === 0.5 ? '½' : ''}</Text>
+                <Text style={s.daysBubbleSub}>{days === 0.5 ? 'half' : days === 1 ? 'day' : 'days'}</Text>
+              </View>
+              <View style={s.arrowLine} />
+            </View>
+
+            <TouchableOpacity
+              style={[s.datePillTo, isHalfDay && s.pillDisabled]}
+              onPress={() => !isHalfDay && setShowEndDatePicker(true)}
+              activeOpacity={isHalfDay ? 1 : 0.7}
+            >
+              <Text style={s.pillTag}>TO</Text>
+              <Text style={s.pillDay}>{formatDay(endDate)}</Text>
+              <Text style={s.pillDate}>{formatDisplay(endDate)}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Half day toggle */}
+          <View style={s.halfRow}>
+            <Text style={s.halfIcon}>🌗</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.halfLabel}>Half Day</Text>
+              <Text style={s.halfHint}>Single-day leaves only</Text>
+            </View>
+            <Switch
+              value={isHalfDay}
+              onValueChange={v => { setIsHalfDay(v); if (v) setHalfDayPeriod('first'); }}
+              trackColor={{ false: '#D1D9E0', true: PURPLE_MID }}
+              thumbColor={isHalfDay ? PURPLE : '#9AAAB8'}
+            />
+          </View>
+
+          {isHalfDay && (
+            <View style={s.periodRow}>
+              {['first', 'second'].map(p => (
+                <TouchableOpacity
+                  key={p}
+                  style={[s.periodBtn, halfDayPeriod === p && s.periodBtnOn]}
+                  onPress={() => setHalfDayPeriod(p)}
+                >
+                  <Text style={[s.periodTxt, halfDayPeriod === p && s.periodTxtOn]}>
+                    {p === 'first' ? '🌅 First Half' : '🌆 Second Half'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* Leave Type Section */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Leave Type *</Text>
+        {/* ── Leave type card ────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>LEAVE TYPE</Text>
           <Dropdown
-            style={[styles.dropdown, isFocusTask && { borderColor: '#24bcf7' }]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            inputSearchStyle={styles.inputSearchStyle}
-            iconStyle={styles.iconStyle}
-            containerStyle={styles.dropdownListContainer}
-            itemTextStyle={styles.dropdownItemText}
+            style={[s.dropdown, isFocusTask && s.dropdownFocused]}
+            placeholderStyle={s.ddPlaceholder}
+            selectedTextStyle={s.ddSelected}
+            inputSearchStyle={s.ddSearch}
+            iconStyle={s.ddIcon}
+            containerStyle={s.ddContainer}
             data={leaveType}
             renderItem={renderDropdownItem}
-            maxHeight={300}
-            labelField="formatted_label" 
+            maxHeight={260}
+            labelField="formatted_label"
             valueField="leave_type_id"
-            placeholder={!isFocusTask ? 'Select Leave Type' : '...'}
-            searchPlaceholder="Search..."
+            placeholder="Select leave type"
+            searchPlaceholder="Search…"
             value={selectedLeaveTypeId}
             onFocus={() => setIsFocusTask(true)}
             onBlur={() => setIsFocusTask(false)}
             onChange={item => {
-              setSelectedLeaveTypeName(item.leave_type_name);
-
-              if (item?.remaining_leaves == 0) {
+              setSelectedLeaveTypeName(item.name);
+              const remaining = parseInt(item.remaining_leaves ?? item.max_days_per_year ?? 0);
+              if (remaining === 0) {
                 setShowMessageModal(true);
               } else {
-                setSelectedLeaveTypeId(item.leave_type_id);
+                setSelectedLeaveTypeId(item.id);
                 setIsFocusTask(false);
               }
             }}
-            renderLeftIcon={() => <Text style={styles.icon}>🗓️</Text>}
+            renderLeftIcon={() => (
+              <View style={[s.ddDot, {
+                backgroundColor: leaveType.find(l => l.leave_type_id === selectedLeaveTypeId)?.color || PURPLE,
+              }]} />
+            )}
           />
         </View>
-        <MessageModal
-          isVisible={showMessageModal}
-          onClose={() => {
-            setShowMessageModal(false);
-          }}
-          message={`You have no available ${selectedLeaveTypeName}`}
-          okLabel="OK"
-        />
-        {/* Total Days Display */}
-        <View style={styles.section}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Total Leave Days</Text>
-            <Text style={styles.summaryValue}>
-              {calculateLeaveDays()}{' '}
-              {calculateLeaveDays() === 1 ? 'day' : 'days'}
-            </Text>
-          </View>
-        </View>
 
-        {/* Reason Section */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Reason for Leave *</Text>
-          <TextInputWithButton
-            show={true}
-            icon={true}
-            height={normalize(45)}
-            inputWidth={'100%'}
-            textColor={Colors.white}
-            placeholder={'Reason'}
-            placeholderTextColor={Colors.black}
-            paddingLeft={normalize(25)}
-            borderColor={Colors.white}
-            borderRadius={normalize(5)}
-            editable={true}
-            fontFamily={Fonts.MulishRegular}
-            isheadertext={true}
+        {/* ── Reason card (native TextInput) ─────────────── */}
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>REASON FOR LEAVE</Text>
+          <TextInput
+            style={[s.reasonInput, reasonFocused && s.reasonInputFocused]}
+            placeholder="Briefly describe your reason…"
+            placeholderTextColor={TEXT_MUTED}
             value={reason}
-            fontSize={normalize(14)}
-            headertxtsize={normalize(13)}
             onChangeText={setReason}
-            tintColor={Colors.white}
-            multiline={true}
+            onFocus={() => setReasonFocused(true)}
+            onBlur={() => setReasonFocused(false)}
+            multiline
             maxLength={500}
+            textAlignVertical="top"
           />
-          <Text style={styles.characterCount}>{reason.length}/500</Text>
+          <Text style={s.charCount}>{reason.length}/500</Text>
         </View>
 
-        {/* Supporting Document Section */}
-        <View style={styles.section}>
-          <Text style={styles.label}>
-            Supporting Document{' '}
-            {selectedLeaveTypeId == 11 || selectedLeaveTypeId == 13
-              ? ''
-              : '(Optional)'}
-          </Text>
+        {/* ── Supporting document card ───────────────────── */}
+        <View style={s.card}>
+          <View style={s.cardTitleRow}>
+            <Text style={s.sectionLabel}>SUPPORTING DOCUMENT</Text>
+            {!(selectedLeaveTypeId == 11 || selectedLeaveTypeId == 13) && (
+              <View style={s.optBadge}><Text style={s.optBadgeTxt}>Optional</Text></View>
+            )}
+          </View>
 
           {supportingDocument ? (
-            <View style={styles.fileContainer}>
-              <View style={styles.fileInfo}>
-                <Text style={styles.fileName}>
-                  {supportingDocument.fileName || 'Selected file'}
+            <View style={s.fileAttached}>
+              <View style={s.fileIcon}><Text style={{ fontSize: 20 }}>🖼️</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.fileName} numberOfLines={1}>
+                  {supportingDocument.fileName || 'Selected photo'}
                 </Text>
-                <Text style={styles.fileSize}>
-                  {supportingDocument.fileSize
-                    ? `${(supportingDocument.fileSize / 1024).toFixed(1)} KB`
-                    : ''}
-                </Text>
+                {supportingDocument.fileSize && (
+                  <Text style={s.fileSize}>
+                    {(supportingDocument.fileSize / 1024).toFixed(1)} KB
+                  </Text>
+                )}
               </View>
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={removeFile}
-              >
-                <Text style={styles.removeButtonText}>✕</Text>
+              <TouchableOpacity style={s.removeBtn} onPress={() => setSupportingDocument(null)}>
+                <Text style={s.removeTxt}>✕</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.uploadButton}
-              onPress={handleFileOptions}
-            >
-              <Text style={styles.uploadIcon}>📎</Text>
-              <Text style={styles.uploadText}>Upload Photo</Text>
+            <TouchableOpacity style={s.uploadZone} onPress={() => setShowFileOptions(true)}>
+              <Text style={{ fontSize: 24, marginBottom: 4 }}>📎</Text>
+              <Text style={s.uploadTxt}>Attach a photo</Text>
+              <Text style={s.uploadHint}>Camera or Gallery</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Apply Button */}
+        {/* ── Submit ────────────────────────────────────── */}
         <TouchableOpacity
-          style={[
-            styles.submitButton,
-            isSubmitting && styles.submitButtonDisabled,{marginBottom:100}
-          ]}
-          onPress={() => {
-            handleSubmit();
-          }}
+          style={[s.submitBtn, isSubmitting && s.submitBtnOff]}
+          onPress={handleSubmit}
           disabled={isSubmitting}
+          activeOpacity={0.85}
         >
-          <Text style={styles.submitButtonText}>
-            {isSubmitting ? 'Applying...' : 'Apply Leave'}
+          <Text style={s.submitTxt}>
+            {isSubmitting ? 'Submitting…' : 'Submit Leave Request'}
           </Text>
         </TouchableOpacity>
-
-        <View style={styles.bottomSpace} />
       </ScrollView>
 
-      {/* Date Pickers */}
-      <DatePicker
-        modal
-        open={showStartDatePicker}
-        date={startDate}
-        mode="date"
-        onConfirm={handleStartDateConfirm}
-        onCancel={handleStartDateCancel}
-        minimumDate={new Date()}
-        title="Select Start Date"
-        confirmText="Confirm"
-        cancelText="Cancel"
+      {/* Date pickers */}
+      <DatePicker modal open={showStartDatePicker} date={startDate} mode="date"
+        onConfirm={handleStartDateConfirm} onCancel={() => setShowStartDatePicker(false)}
+        minimumDate={new Date()} title="Select Start Date" confirmText="Confirm" cancelText="Cancel" />
+      <DatePicker modal open={showEndDatePicker} date={endDate} mode="date"
+        onConfirm={handleEndDateConfirm} onCancel={() => setShowEndDatePicker(false)}
+        minimumDate={startDate} title="Select End Date" confirmText="Confirm" cancelText="Cancel" />
+
+      {/* No-leave modal */}
+      <MessageModal
+        isVisible={showMessageModal}
+        onClose={() => setShowMessageModal(false)}
+        message={`You have no available ${selectedLeaveTypeName}`}
+        okLabel="OK"
       />
 
-      <DatePicker
-        modal
-        open={showEndDatePicker}
-        date={endDate}
-        mode="date"
-        onConfirm={handleEndDateConfirm}
-        onCancel={handleEndDateCancel}
-        minimumDate={startDate}
-        title="Select End Date"
-        confirmText="Confirm"
-        cancelText="Cancel"
-      />
-
-      {/* File Options Modal */}
-      <Modal
-        animationIn={'slideInUp'}
-        animationOut={'slideOutDown'}
-        backdropTransitionOutTiming={0}
-        backdropOpacity={0.5}
-        hideModalContentWhileAnimating={true}
-        isVisible={showFileOptions}
-        style={{ justifyContent: 'flex-end', margin: 0 }}
-        animationInTiming={300}
-        animationOutTiming={300}
-        onBackdropPress={() => setShowFileOptions(false)}
-      >
-        <View style={styles.fileOptionsContainer}>
-          <Text style={styles.fileOptionsTitle}>Select Option</Text>
-
-          <TouchableOpacity style={styles.fileOption} onPress={handleCamera}>
-            <Text style={styles.fileOptionIcon}>📷</Text>
-            <Text style={styles.fileOptionText}>Take Photo</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.fileOption} onPress={handleGallery}>
-            <Text style={styles.fileOptionIcon}>📁</Text>
-            <Text style={styles.fileOptionText}>Choose from Files</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.cancelOption}
-            onPress={() => setShowFileOptions(false)}
-          >
-            <Text style={styles.cancelOptionText}>Cancel</Text>
+      {/* File options bottom sheet */}
+      <Modal animationIn="slideInUp" animationOut="slideOutDown"
+        backdropTransitionOutTiming={0} backdropOpacity={0.45}
+        hideModalContentWhileAnimating isVisible={showFileOptions}
+        style={s.bsModal} onBackdropPress={() => setShowFileOptions(false)}>
+        <View style={s.bs}>
+          <View style={s.bsHandle} />
+          <Text style={s.bsTitle}>Add Document</Text>
+          {[
+            { label: 'Take Photo',            sub: 'Use your camera',  icon: '📷', bg: PURPLE_LIGHT, fn: handleCamera  },
+            { label: 'Choose from Gallery',   sub: 'Photos & files',   icon: '🖼️', bg: GREEN_LIGHT,  fn: handleGallery },
+          ].map(opt => (
+            <TouchableOpacity key={opt.label} style={s.sheetOpt} onPress={opt.fn}>
+              <View style={[s.sheetOptIcon, { backgroundColor: opt.bg }]}>
+                <Text style={{ fontSize: 20 }}>{opt.icon}</Text>
+              </View>
+              <View>
+                <Text style={s.sheetOptTitle}>{opt.label}</Text>
+                <Text style={s.sheetOptSub}>{opt.sub}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={s.sheetCancel} onPress={() => setShowFileOptions(false)}>
+            <Text style={s.sheetCancelTxt}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </Modal>
 
-      {/* Holiday Modal */}
-      <Modal
-        animationIn={'slideInUp'}
-        animationOut={'slideOutDown'}
-        backdropTransitionOutTiming={0}
-        backdropOpacity={0.1}
-        hideModalContentWhileAnimating={true}
-        isVisible={isHolidayVisible}
-        style={{ width: '100%', alignSelf: 'center', margin: 0 }}
-        animationInTiming={800}
-        animationOutTiming={1000}
-        onBackdropPress={() => setIsHolidayVisible(!isHolidayVisible)}
-      >
-        <View style={styles.modalContainer}>
-          <TouchableOpacity
-            style={{
-              position: 'absolute',
-              top: -25,
-              right: normalize(0),
-              zIndex: 99,
-            }}
-            onPress={() => {
-              setIsHolidayVisible(!isHolidayVisible);
-            }}
-          >
-            <Image
-              source={Images.cross}
-              style={{
-                height: normalize(60),
-                width: normalize(60),
-                zIndex: 99,
-              }}
-            />
-          </TouchableOpacity>
-          <Text style={styles.title}>Holiday Calendar</Text>
-
+      {/* Holiday bottom sheet */}
+      <Modal animationIn="slideInUp" animationOut="slideOutDown"
+        backdropTransitionOutTiming={0} backdropOpacity={0.5}
+        hideModalContentWhileAnimating isVisible={isHolidayVisible}
+        style={s.bsModal} onBackdropPress={() => setIsHolidayVisible(false)}>
+        <View style={[s.bs, { maxHeight: '80%' }]}>
+          <View style={s.bsHandle} />
+          <View style={s.holidayHeader}>
+            <Text style={s.holidayTitle}>Holiday Calendar</Text>
+            <View style={s.holidayCountPill}>
+              <Text style={s.holidayCountTxt}>{holidays.length} holidays</Text>
+            </View>
+          </View>
           <FlatList
             data={holidays}
-            keyExtractor={item => item.id}
-            renderItem={renderHolidayItem}
-            ListHeaderComponent={renderHeader}
-            ListFooterComponent={renderFooter}
-            style={styles.flatList}
+            keyExtractor={item => String(item.id)}
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            ListHeaderComponent={
+              <View style={s.hListHeader}>
+                <Text style={[s.hListHeaderTxt, { flex: 1 }]}>Date</Text>
+                <Text style={[s.hListHeaderTxt, { flex: 2 }]}>Holiday</Text>
+              </View>
+            }
+            renderItem={({ item, index }) => (
+              <View style={[s.hItem, index % 2 === 0 && s.hItemAlt]}>
+                <View style={s.hDateBadge}>
+                  <Text style={s.hDateDay}>{moment(item.holiday_date).format('DD')}</Text>
+                  <Text style={s.hDateMon}>{moment(item.holiday_date).format('MMM')}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.hName}>{item.holiday_name}</Text>
+                  <Text style={s.hWeekday}>{moment(item.holiday_date).format('dddd')}</Text>
+                </View>
+              </View>
+            )}
           />
         </View>
       </Modal>
@@ -658,357 +484,270 @@ const ApplyLeave = () => {
 
 export default ApplyLeave;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: Colors.bgColor,
+/* ─────────────────────────────────────────────────────────────────────────── */
+const s = StyleSheet.create({
+  container:    { flex: 1, backgroundColor: BG },
+  scrollContent: {
+    paddingHorizontal: normalize(14),
+    paddingTop:        normalize(12),
+    paddingBottom:     normalize(110),
   },
-  modalContainer: {
-    height: normalize(550),
-    backgroundColor: '#808080',
-    width: '95%',
-    alignSelf: 'center',
-    borderRadius: 10,
+
+  /* Top bar */
+  topBar: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: normalize(14),
   },
-  header: {
-    backgroundColor: '#3498db',
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+  screenTitle: { fontSize: normalize(20), fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.4 },
+  screenSub:   { fontSize: normalize(11), color: TEXT_MUTED, marginTop: 1 },
+  holidayBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: PURPLE_LIGHT, borderWidth: 1.5, borderColor: PURPLE_MID,
+    paddingHorizontal: normalize(11), paddingVertical: normalize(7),
+    borderRadius: normalize(10), gap: 5,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
-  },
-  formContainer: {
-    flex: 1,
-    paddingHorizontal: normalize(10),
-    paddingTop: 20,
-    paddingBottom: normalize(100),
-  },
-  section: {
-    marginBottom: 25,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.white,
-    marginBottom: 8,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'white',
+  holidayBtnIcon: { fontSize: 14 },
+  holidayBtnText: { fontSize: normalize(12), color: PURPLE, fontWeight: '700' },
+
+  /* Card */
+  card: {
+    backgroundColor: CARD,
+    borderRadius: normalize(14),
+    padding: normalize(14),
+    marginBottom: normalize(11),
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    elevation: 1,
-  },
-  dateText: {
-    fontSize: 16,
-    color: '#2c3e50',
-  },
-  dateIcon: {
-    fontSize: 20,
-  },
-  summaryCard: {
-    backgroundColor: '#e8f6f3',
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: '#27ae60',
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#27ae60',
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 18,
-    color: '#27ae60',
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  characterCount: {
-    fontSize: 12,
-    color: '#95a5a6',
-    textAlign: 'right',
-    marginTop: 5,
-  },
-  submitButton: {
-    backgroundColor: '#27ae60',
-    borderRadius: 8,
-    paddingVertical: 15,
-    alignItems: 'center',
+    borderColor: '#D4D9E6',          // ← visible card border
+    shadowColor: '#6B7A99',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
-  submitButtonDisabled: {
-    backgroundColor: '#95a5a6',
-    elevation: 1,
+  sectionLabel: {
+    fontSize: normalize(10), fontWeight: '800', color: TEXT_MUTED,
+    letterSpacing: 1, marginBottom: normalize(10),
   },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  cardTitleRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: normalize(10),
   },
-  bottomSpace: {
-    height: 30,
+
+  /* Date pills */
+  dateRow: { flexDirection: 'row', alignItems: 'center' },
+  datePillFrom: {
+    flex: 1, alignItems: 'center', paddingVertical: normalize(11),
+    borderRadius: normalize(11), borderWidth: 2, borderColor: PURPLE,
+    backgroundColor: PURPLE_LIGHT,
   },
-  titleContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+  datePillTo: {
+    flex: 1, alignItems: 'center', paddingVertical: normalize(11),
+    borderRadius: normalize(11), borderWidth: 2, borderColor: GREEN_BORDER,
+    backgroundColor: GREEN_LIGHT,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.white,
-    textAlign: 'center',
-    marginTop: normalize(10),
+  pillDisabled: { backgroundColor: '#F0F2F6', borderColor: BORDER, opacity: 0.55 },
+  pillTag:  { fontSize: normalize(8.5), fontWeight: '800', color: TEXT_MUTED, letterSpacing: 1, marginBottom: 2 },
+  pillDay:  { fontSize: normalize(10), color: TEXT_MID, marginBottom: 2 },
+  pillDate: { fontSize: normalize(12.5), fontWeight: '800', color: TEXT_DARK },
+
+  pillMid:    { alignItems: 'center', paddingHorizontal: normalize(6) },
+  arrowLine:  { width: 20, height: 1.5, backgroundColor: '#B8C0CC' },
+  daysBubble: {
+    alignItems: 'center', paddingHorizontal: normalize(8), paddingVertical: normalize(4),
+    backgroundColor: '#F0F2F8', borderRadius: normalize(20),
+    borderWidth: 1.5, borderColor: BORDER,
+    marginVertical: 3,
   },
-  flatList: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+  daysBubbleTxt: { fontSize: normalize(12), fontWeight: '800', color: TEXT_DARK },
+  daysBubbleSub: { fontSize: normalize(9), color: TEXT_MUTED, marginTop: 1 },
+
+  /* Half day */
+  halfRow: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: normalize(12), paddingTop: normalize(11),
+    borderTopWidth: 1.5, borderTopColor: '#E2E8F0', gap: normalize(10),
   },
-  headerContainer: {
-    backgroundColor: '#007bff',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+  halfIcon:  { fontSize: 18 },
+  halfLabel: { fontSize: normalize(13), fontWeight: '700', color: TEXT_DARK },
+  halfHint:  { fontSize: normalize(10), color: TEXT_MUTED, marginTop: 1 },
+
+  periodRow: { flexDirection: 'row', gap: normalize(9), marginTop: normalize(10) },
+  periodBtn: {
+    flex: 1, paddingVertical: normalize(9), borderRadius: normalize(10),
+    alignItems: 'center', backgroundColor: '#F0F2F8',
+    borderWidth: 2, borderColor: BORDER,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  itemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  evenRow: {
-    backgroundColor: '#f8f9fa',
-  },
-  oddRow: {
-    backgroundColor: '#ffffff',
-  },
-  itemText: {
-    fontSize: 14,
-    color: '#495057',
-  },
-  holidayName: {
-    fontWeight: '500',
-    color: '#212529',
-  },
-  nameColumn: {
-    flex: 2,
-  },
-  dateColumn: {
-    flex: 1.5,
-  },
-  footerContainer: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: '#f8f9fa',
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#6c757d',
-  },
+  periodBtnOn: { backgroundColor: PURPLE_LIGHT, borderColor: PURPLE },
+  periodTxt:   { fontSize: normalize(12), color: TEXT_MID, fontWeight: '600' },
+  periodTxtOn: { color: PURPLE, fontWeight: '800' },
+
+  /* Dropdown */
   dropdown: {
-    height: 50,
-    width: '100%',
-    borderColor: '#2494ea',
+    height: normalize(46), borderColor: BORDER, borderWidth: 2,
+    borderRadius: normalize(11), paddingHorizontal: normalize(12),
+    backgroundColor: '#F7F9FC',
+  },
+  dropdownFocused:  { borderColor: PURPLE, backgroundColor: PURPLE_LIGHT },
+  ddContainer: {
+    borderRadius: normalize(12), borderWidth: 0, elevation: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14, shadowRadius: 12, backgroundColor: '#fff',
+  },
+  ddPlaceholder: { fontSize: normalize(13), color: TEXT_MUTED },
+  ddSelected:    { fontSize: normalize(13), color: TEXT_DARK, fontWeight: '700' },
+  ddSearch:      { fontSize: normalize(12), color: TEXT_DARK },
+  ddIcon:        { width: 18, height: 18 },
+  ddDot:         { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+
+  ddItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: normalize(11), paddingHorizontal: normalize(14),
+    borderBottomWidth: 1, borderBottomColor: '#F0F2F8',
+  },
+  ddItemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  colorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
+  ddItemName: { fontSize: normalize(13), color: TEXT_DARK, fontWeight: '500' },
+
+  badge:        { paddingHorizontal: normalize(8), paddingVertical: normalize(3), borderRadius: normalize(20) },
+  badgeGreen:   { backgroundColor: '#E3F9EE' },
+  badgeOrange:  { backgroundColor: '#FFF3E0' },
+  badgeRed:     { backgroundColor: '#FEECEC' },
+  badgeTxt:     { fontSize: normalize(11), fontWeight: '700' },
+  badgeGreenTxt:  { color: GREEN },
+  badgeOrangeTxt: { color: '#C05621' },
+  badgeRedTxt:    { color: '#C53030' },
+
+  /* Reason TextInput */
+  reasonInput: {
+    height: normalize(88),
     borderWidth: 2,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    backgroundColor: 'white',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    borderColor: BORDER,
+    borderRadius: normalize(11),
+    paddingHorizontal: normalize(12),
+    paddingVertical: normalize(10),
+    fontSize: normalize(13.5),
+    color: TEXT_DARK,
+    backgroundColor: '#F7F9FC',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    lineHeight: normalize(20),
   },
-  dropdownListContainer: {
-    backgroundColor: Colors.greytext,
-    borderRadius: 8,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+  reasonInputFocused: {
+    borderColor: PURPLE,
+    backgroundColor: PURPLE_LIGHT,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 3,
   },
-  dropdownItemText: {
-    color: '#000000',
-    fontSize: 16,
-    fontWeight: '600',
+  charCount: { fontSize: normalize(10.5), color: '#B0BAC6', textAlign: 'right', marginTop: normalize(5) },
+
+  /* Optional badge */
+  optBadge: {
+    backgroundColor: '#EDF2F7', paddingHorizontal: normalize(8),
+    paddingVertical: normalize(2), borderRadius: normalize(20), borderWidth: 1, borderColor: BORDER,
   },
-  icon: {
-    marginRight: 10,
-    fontSize: 18,
+  optBadgeTxt: { fontSize: normalize(10), color: TEXT_MID, fontWeight: '600' },
+
+  /* File upload */
+  uploadZone: {
+    alignItems: 'center', paddingVertical: normalize(18),
+    borderRadius: normalize(11), borderWidth: 2,
+    borderColor: BORDER, borderStyle: 'dashed',
+    backgroundColor: '#F7F9FC',
   },
-  // File upload styles
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    paddingVertical: 20,
-    paddingHorizontal: 15,
-    elevation: 1,
+  uploadTxt:  { fontSize: normalize(13), color: TEXT_MID, fontWeight: '700' },
+  uploadHint: { fontSize: normalize(10.5), color: TEXT_MUTED, marginTop: 3 },
+
+  fileAttached: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: GREEN_LIGHT, borderRadius: normalize(11),
+    padding: normalize(11), borderWidth: 2, borderColor: GREEN_BORDER,
   },
-  uploadIcon: {
-    fontSize: 24,
-    marginRight: 10,
+  fileIcon: {
+    width: normalize(38), height: normalize(38), borderRadius: normalize(9),
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginRight: normalize(11),
   },
-  uploadText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+  fileName: { fontSize: normalize(12.5), fontWeight: '700', color: TEXT_DARK },
+  fileSize:  { fontSize: normalize(10.5), color: GREEN, marginTop: 2 },
+  removeBtn: {
+    width: normalize(26), height: normalize(26), borderRadius: normalize(13),
+    backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#FCA5A5',
   },
-  fileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#27ae60',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    elevation: 1,
+  removeTxt: { fontSize: normalize(12), color: '#DC2626', fontWeight: '700' },
+
+  /* Submit */
+  submitBtn: {
+    backgroundColor: PURPLE, borderRadius: normalize(13),
+    paddingVertical: normalize(15), alignItems: 'center',
+    marginTop: normalize(4),
+    shadowColor: PURPLE_DARK, shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.4, shadowRadius: 14, elevation: 6,
   },
-  fileInfo: {
-    flex: 1,
+  submitBtnOff: { backgroundColor: '#C0C7D4', shadowOpacity: 0, elevation: 0 },
+  submitTxt: { color: '#fff', fontSize: normalize(15), fontWeight: '800', letterSpacing: 0.2 },
+
+  /* Bottom sheet */
+  bsModal: { justifyContent: 'flex-end', margin: 0 },
+  bs: {
+    backgroundColor: '#fff', borderTopLeftRadius: normalize(22), borderTopRightRadius: normalize(22),
+    paddingHorizontal: normalize(18), paddingTop: normalize(10), paddingBottom: normalize(38),
   },
-  fileName: {
-    fontSize: 14,
-    color: '#2c3e50',
-    fontWeight: '500',
+  bsHandle: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D9E0',
+    alignSelf: 'center', marginBottom: normalize(14),
   },
-  fileSize: {
-    fontSize: 12,
-    color: '#95a5a6',
-    marginTop: 2,
+  bsTitle: {
+    fontSize: normalize(16), fontWeight: '800', color: TEXT_DARK,
+    textAlign: 'center', marginBottom: normalize(16),
   },
-  removeButton: {
-    backgroundColor: '#e74c3c',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
+  sheetOpt: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: normalize(13),
+    borderBottomWidth: 1.5, borderBottomColor: '#EEF1F6', gap: normalize(13),
   },
-  removeButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+  sheetOptIcon: {
+    width: normalize(42), height: normalize(42), borderRadius: normalize(11),
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#D4D9E6',
   },
-  // File options modal styles
-  fileOptionsContainer: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
+  sheetOptTitle: { fontSize: normalize(13.5), fontWeight: '700', color: TEXT_DARK },
+  sheetOptSub:   { fontSize: normalize(11.5), color: TEXT_MUTED, marginTop: 2 },
+  sheetCancel: {
+    alignItems: 'center', marginTop: normalize(14), paddingVertical: normalize(11),
+    borderRadius: normalize(10), borderWidth: 1.5, borderColor: '#FECACA',
+    backgroundColor: '#FFF5F5',
   },
-  fileOptionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#2c3e50',
+  sheetCancelTxt: { fontSize: normalize(14), color: '#DC2626', fontWeight: '700' },
+
+  /* Holiday list */
+  holidayHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: normalize(12),
   },
-  fileOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+  holidayTitle:    { fontSize: normalize(16), fontWeight: '800', color: TEXT_DARK },
+  holidayCountPill: {
+    backgroundColor: PURPLE_LIGHT, paddingHorizontal: normalize(10), paddingVertical: normalize(4),
+    borderRadius: normalize(20), borderWidth: 1.5, borderColor: PURPLE_MID,
   },
-  fileOptionIcon: {
-    fontSize: 24,
-    marginRight: 15,
+  holidayCountTxt: { fontSize: normalize(11), color: PURPLE, fontWeight: '700' },
+  hListHeader: {
+    flexDirection: 'row', paddingVertical: normalize(7), paddingHorizontal: normalize(4),
+    borderBottomWidth: 2, borderBottomColor: '#E2E8F0', marginBottom: normalize(4),
   },
-  fileOptionText: {
-    fontSize: 16,
-    color: '#2c3e50',
-    fontWeight: '500',
+  hListHeaderTxt: { fontSize: normalize(10), fontWeight: '800', color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: 0.7 },
+  hItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: normalize(9), paddingHorizontal: normalize(4),
+    borderRadius: normalize(8), gap: normalize(12),
   },
-  cancelOption: {
-    alignItems: 'center',
-    paddingVertical: 15,
-    marginTop: 10,
+  hItemAlt: { backgroundColor: '#F7F9FC' },
+  hDateBadge: {
+    width: normalize(42), height: normalize(42), borderRadius: normalize(10),
+    backgroundColor: PURPLE_LIGHT, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: PURPLE_MID,
   },
-  cancelOptionText: {
-    fontSize: 16,
-    color: '#e74c3c',
-    fontWeight: '600',
-  },
-   dropdownItem: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  balanceText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  lowBalanceText: {
-    color: '#ff9500', // Orange for low balance
-  },
-  noBalanceText: {
-    color: '#ff3b30', // Red for no balance
-  },
+  hDateDay: { fontSize: normalize(14), fontWeight: '900', color: PURPLE, lineHeight: normalize(16) },
+  hDateMon: { fontSize: normalize(9), fontWeight: '700', color: PURPLE, textTransform: 'uppercase' },
+  hName:    { fontSize: normalize(12.5), fontWeight: '700', color: TEXT_DARK },
+  hWeekday: { fontSize: normalize(10.5), color: TEXT_MUTED, marginTop: 1 },
 });

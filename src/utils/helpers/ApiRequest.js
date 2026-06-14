@@ -74,3 +74,15 @@ export async function putApi(url, payload, header) {
     },
   });
 }
+
+export async function patchApi(url, payload, header) {
+  console.log('PatchApi: ', `${constants.BASE_URL}/${url}`, payload);
+
+  return await axios.patch(`${constants.BASE_URL}/${url}`, payload, {
+    headers: {
+      Accept: header.Accept,
+      'Content-Type': header.contenttype,
+      'Authorization': header.accesstoken,
+    },
+  });
+}

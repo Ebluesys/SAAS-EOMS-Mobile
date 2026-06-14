@@ -1,1382 +1,800 @@
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Alert,
-  FlatList,
-  Image,
-  ImageBackground,
-  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
-  Platform,
+  FlatList,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+  Animated,
+  ScrollView,
+  StatusBar,
 } from 'react-native';
-import React, { useEffect, useRef, useState } from 'react';
-import { Colors, Fonts, Images } from '../../themes/ThemePath';
-import showErrorAlert from '../../utils/helpers/Toast';
-import normalize from '../../utils/helpers/normalize';
-import moment from 'moment';
-import { Dropdown } from 'react-native-element-dropdown';
-import Modal from 'react-native-modal';
+import Header from '../../components/Header';
+import Loader from '../../utils/helpers/Loader';
 import { useDispatch, useSelector } from 'react-redux';
 import { useIsFocused } from '@react-navigation/native';
-import Geolocation from '@react-native-community/geolocation';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import {
-  addTaskRequest,
-  attendenceStatusRequest,
-  complitedTaskListRequest,
-  endTaskRequest,
-  startTaskRequest,
-  taskDoItLaterRequest,
   taskListRequest,
-  taskLocationRequest,
+  updateTaskRequest,
 } from '../../redux/reducer/ProfileReducer';
-import connectionrequest from '../../utils/helpers/NetInfo';
-import Loader from '../../utils/helpers/Loader';
-import TextInputWithButton from '../../components/TextInputWithBotton';
-import Button from '../../components/Button';
-import constants from '../../utils/helpers/constants';
-import Header from '../../components/Header';
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  todo: {
+    label: 'To Do',
+    desc: 'Not started yet',
+    icon: '○',
+    color: '#64748B',
+    bg: '#F8FAFC',
+    border: '#CBD5E1',
+  },
+  in_progress: {
+    label: 'In Progress',
+    desc: 'Currently being worked',
+    icon: '◑',
+    color: '#2563EB',
+    bg: '#EFF6FF',
+    border: '#93C5FD',
+  },
+  paused: {
+    label: 'Paused',
+    desc: 'Temporarily on hold',
+    icon: '⏸',
+    color: '#D97706',
+    bg: '#FFFBEB',
+    border: '#FCD34D',
+  },
+  review: {
+    label: 'Review',
+    desc: 'Awaiting feedback',
+    icon: '◎',
+    color: '#7C3AED',
+    bg: '#F5F3FF',
+    border: '#C4B5FD',
+  },
+  done: {
+    label: 'Done',
+    desc: 'Completed successfully',
+    icon: '✓',
+    color: '#16A34A',
+    bg: '#F0FDF4',
+    border: '#86EFAC',
+  },
+  blocked: {
+    label: 'Blocked',
+    desc: 'Needs unblocking',
+    icon: '✕',
+    color: '#DC2626',
+    bg: '#FEF2F2',
+    border: '#FCA5A5',
+  },
+};
+
+const PRIORITY_CONFIG = {
+  urgent: { label: 'Urgent', color: '#B91C1C', bg: '#FEF2F2' },
+  high: { label: 'High', color: '#C2410C', bg: '#FFF7ED' },
+  medium: { label: 'Medium', color: '#B45309', bg: '#FFFBEB' },
+  low: { label: 'Low', color: '#15803D', bg: '#F0FDF4' },
+};
+
+const STATUS_ORDER = [
+  'todo',
+  'in_progress',
+  'paused',
+  'review',
+  'done',
+  'blocked',
+];
+const FILTERS = ['all', ...STATUS_ORDER];
+const FILTER_LABELS = {
+  all: 'All',
+  ...Object.fromEntries(STATUS_ORDER.map(k => [k, STATUS_CONFIG[k].label])),
+};
+
+// ─── Status Bottom Sheet ──────────────────────────────────────────────────────
+
+const StatusSheet = ({ visible, task, onSelect, onClose }) => {
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 80,
+          friction: 12,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 400,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  if (!task) return null;
+
+  return (
+    <Modal
+      transparent
+      visible={visible}
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+        <Animated.View style={[ss.overlay, { opacity: fadeAnim }]} />
+      </Pressable>
+      <Animated.View
+        style={[ss.sheet, { transform: [{ translateY: slideAnim }] }]}
+      >
+        <View style={ss.handle} />
+        <View style={ss.sheetHeader}>
+          <View>
+            <Text style={ss.sheetTitle}>Change Status</Text>
+            <Text style={ss.sheetTask} numberOfLines={1}>
+              {task.title}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={ss.closeBtn}
+            onPress={onClose}
+            activeOpacity={0.7}
+          >
+            <Text style={ss.closeBtnText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+          {STATUS_ORDER.map(key => {
+            const cfg = STATUS_CONFIG[key];
+            const isActive = task.status === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[ss.statusOpt, isActive && { backgroundColor: cfg.bg }]}
+                onPress={() => onSelect(task.id, key)}
+                activeOpacity={0.7}
+              >
+                <View style={[ss.optIconWrap, { backgroundColor: cfg.bg }]}>
+                  <Text style={[ss.optIcon, { color: cfg.color }]}>
+                    {cfg.icon}
+                  </Text>
+                </View>
+                <View style={ss.optInfo}>
+                  <Text
+                    style={[
+                      ss.optName,
+                      isActive && { color: cfg.color, fontWeight: '600' },
+                    ]}
+                  >
+                    {cfg.label}
+                  </Text>
+                  <Text style={ss.optDesc}>{cfg.desc}</Text>
+                </View>
+                {isActive && (
+                  <View style={[ss.checkCircle, { backgroundColor: cfg.bg }]}>
+                    <Text style={[ss.checkMark, { color: cfg.color }]}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      </Animated.View>
+    </Modal>
+  );
+};
+
+// Card color themes per status
+const CARD_THEME = {
+  todo: { accent: '#64748B', tint: '#F1F5F9', shadow: '#CBD5E1' },
+  in_progress: { accent: '#2563EB', tint: '#DBEAFE', shadow: '#93C5FD' },
+  paused: { accent: '#D97706', tint: '#FEF3C7', shadow: '#FCD34D' },
+  review: { accent: '#7C3AED', tint: '#EDE9FE', shadow: '#C4B5FD' },
+  done: { accent: '#16A34A', tint: '#DCFCE7', shadow: '#86EFAC' },
+  blocked: { accent: '#DC2626', tint: '#FEE2E2', shadow: '#FCA5A5' },
+};
+
+// Task Card
+const TaskCard = React.memo(({ item, onOpenPicker }) => {
+  const s = STATUS_CONFIG[item.status] || STATUS_CONFIG.todo;
+  const p = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.medium;
+  const theme = CARD_THEME[item.status] || CARD_THEME.todo;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const due = item.due_date
+    ? new Date(item.due_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    : null;
+  const overdue =
+    item.due_date &&
+    new Date(item.due_date) < new Date() &&
+    item.status !== 'done';
+
+  const onPressIn = () =>
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 40,
+    }).start();
+  const onPressOut = () =>
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+    }).start();
+
+  return (
+    <TouchableOpacity
+      activeOpacity={1}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      onPress={() => onOpenPicker(item)}
+    >
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <View style={[cs.cardShadowBot, { backgroundColor: theme.shadow }]} />
+        <View
+          style={[
+            cs.cardShadowMid,
+            { backgroundColor: theme.shadow, opacity: 0.5 },
+          ]}
+        />
+        <View style={[cs.card, { borderColor: theme.accent + '55' }]}>
+          <View style={[cs.topStrip, { backgroundColor: theme.tint }]}>
+            <View style={[cs.accentBar, { backgroundColor: theme.accent }]} />
+            <View style={cs.stripContent}>
+              <Text
+                style={[cs.cardTitle, { color: theme.accent }]}
+                numberOfLines={1}
+              >
+                {item.title}
+              </Text>
+              <View
+                style={[
+                  cs.priorityPill,
+                  { backgroundColor: p.bg, borderColor: p.color + '55' },
+                ]}
+              >
+                <Text style={[cs.priorityText, { color: p.color }]}>
+                  {p.label}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <View style={cs.cardBody}>
+            {!!item.description && (
+              <Text style={cs.cardDesc} numberOfLines={1}>
+                {item.description}
+              </Text>
+            )}
+            <View style={cs.cardFooter}>
+              <View
+                style={[
+                  cs.statusBadge,
+                  { backgroundColor: s.bg, borderColor: s.border },
+                ]}
+              >
+                <Text style={[cs.statusIcon, { color: s.color }]}>
+                  {s.icon}
+                </Text>
+                <Text style={[cs.statusLabel, { color: s.color }]}>
+                  {s.label}
+                </Text>
+                <Text style={[cs.statusChevron, { color: s.color }]}>⌄</Text>
+              </View>
+              <View style={cs.metaRow}>
+                {item.labels?.slice(0, 2).map(l => (
+                  <View
+                    key={l}
+                    style={[
+                      cs.labelChip,
+                      {
+                        backgroundColor: theme.tint,
+                        borderColor: theme.accent + '44',
+                      },
+                    ]}
+                  >
+                    <Text style={[cs.labelText, { color: theme.accent }]}>
+                      {l}
+                    </Text>
+                  </View>
+                ))}
+                {due && (
+                  <Text style={[cs.dueText, overdue && cs.dueDateOverdue]}>
+                    {overdue ? '⚠ ' : ''}
+                    {due}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+});
+
+// ─── Stats Bar ────────────────────────────────────────────────────────────────
+
+const StatsBar = ({ tasks }) => {
+  const done = tasks.filter(t => t.status === 'done').length;
+  const inProg = tasks.filter(t => t.status === 'in_progress').length;
+  const blocked = tasks.filter(t => t.status === 'blocked').length;
+  const todo = tasks.filter(t => t.status === 'todo').length;
+  const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+
+  return (
+    <View style={sb.wrap}>
+      <View style={sb.statRow}>
+        {[
+          { num: done, label: 'Done', color: '#16A34A' },
+          { num: inProg, label: 'In Progress', color: '#2563EB' },
+          { num: blocked, label: 'Blocked', color: '#DC2626' },
+          { num: todo, label: 'To Do', color: '#64748B' },
+        ].map(({ num, label, color }) => (
+          <View key={label} style={sb.statItem}>
+            <Text style={[sb.statNum, { color }]}>{num}</Text>
+            <Text style={sb.statLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={sb.progBg}>
+        <View style={[sb.progFill, { width: `${pct}%` }]} />
+      </View>
+      <Text style={sb.progText}>
+        {done} of {tasks.length} tasks complete · {pct}%
+      </Text>
+    </View>
+  );
+};
+
+// ─── Filter Bar ───────────────────────────────────────────────────────────────
+
+const FilterBar = ({ active, onChange, tasks }) => (
+  <View style={fb.wrapper}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={fb.bar}
+      keyboardShouldPersistTaps="handled"
+    >
+      {FILTERS.map(f => {
+        const count =
+          f === 'all' ? tasks.length : tasks.filter(t => t.status === f).length;
+        const isActive = f === active;
+        return (
+          <TouchableOpacity
+            key={f}
+            style={[fb.chip, isActive && fb.chipActive]}
+            onPress={() => onChange(f)}
+            activeOpacity={0.7}
+          >
+            <Text style={[fb.chipText, isActive && fb.chipTextActive]}>
+              {FILTER_LABELS[f]}
+            </Text>
+            {count > 0 && (
+              <View style={[fb.badge, isActive && fb.badgeActive]}>
+                <Text style={[fb.badgeText, isActive && fb.badgeTextActive]}>
+                  {count}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  </View>
+);
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 let status = '';
 
-const AttendenceReport = props => {
+const ActiveTask = props => {
   const dispatch = useDispatch();
   const ProfileReducer = useSelector(state => state.ProfileReducer);
-
   const isFocused = useIsFocused();
-  const [isClocked, setIsClocked] = useState(false);
-  const [taskSubmitId, setTaskSubmitId] = useState(null);
-  const [taskTrackingId, setTaskTrackingId] = useState(null);
 
-  const [taskAction, setTaskAction] = useState(null);
-  const [endTaskModal, setEndTaskModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loader, setLoader] = useState(false);
-  const [addTaskModal, setAddTaskModal] = useState(false);
-  const [TaskLocationList, setTaskLocation] = useState([]);
-  const [taskSubmit_id, setTaskSubmit_id] = useState();
-  const [taskTracking_id, setTaskTracking_id] = useState();
-
-  const [TaskPurposeList, setTaskPurposeList] = useState([]);
-  const [complitedTaskData, setComplitedTaskData] = useState([]);
-
-  const [isFocusTask1, setIsFocusTask1] = useState(false);
-  const [isFocusTask2, setIsFocusTask2] = useState(false);
-  const [selectedTaskLocation, setSelectedTasklocatio] = useState('');
-  const [selectedTaskPurpose, setSelectedTaskPurpose] = useState('');
-  const [other_location, setOther_location] = useState('');
-  const [other_purpose, setOther_purpose] = useState('');
-
-  // New state variables for date/time pickers
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date());
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    dispatch(complitedTaskListRequest(`approved,ongoing,complete`));
-
-    // simulate wait or use Redux status to stop refreshing
-    setTimeout(() => setRefreshing(false), 1000);
-  };
-  // Date/Time picker handlers
-  const onStartDateChange = (event, selectedDate) => {
-    const currentDate = selectedDate || startDate;
-    setShowStartDatePicker(Platform.OS === 'ios');
-    setStartDate(currentDate);
-  };
-
-  const onEndDateChange = (event, selectedDate) => {
-    const currentDate = selectedDate || endDate;
-    setShowEndDatePicker(Platform.OS === 'ios');
-    setEndDate(currentDate);
-  };
-
-  const onStartTimeChange = (event, selectedTime) => {
-    const currentTime = selectedTime || startTime;
-    setShowStartTimePicker(Platform.OS === 'ios');
-    setStartTime(currentTime);
-  };
-
-  const onEndTimeChange = (event, selectedTime) => {
-    const currentTime = selectedTime || endTime;
-    setShowEndTimePicker(Platform.OS === 'ios');
-    setEndTime(currentTime);
-  };
-
-  // Fixed dropdown handlers and state management
-  const handleTasklocationSelect = async item => {
-    setSelectedTasklocatio(item);
-    setIsFocusTask1(false);
-  };
-
-  const handleTaskPurposeSelect = async item => {
-    setSelectedTaskPurpose(item);
-    setIsFocusTask2(false);
-  };
+  const [taskList, setTaskList] = useState([]);
+  const [filter, setFilter] = useState('all');
+  const [pickerTask, setPickerTask] = useState(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
-    if (isFocused && props?.route?.name == 'Daily Task') {
-      connectionrequest()
-        .then(() => {
-          dispatch(taskListRequest());
-          dispatch(taskLocationRequest());
-          dispatch(complitedTaskListRequest(`approved,ongoing,complete`));
-          dispatch(attendenceStatusRequest());
-        })
-        .catch(err => {
-          showErrorAlert('Please connect to internet');
-        });
-    } else {
-      setAddTaskModal(false);
-    }
+    if (isFocused) dispatch(taskListRequest());
   }, [isFocused]);
-  const buttonResRef = useRef(null);
-  const getLocation = async (taskid, buttonRes) => {
-    setLoader(true);
-    buttonResRef.current = buttonRes;
-    setEndTaskModal(false);
-    setAddTaskModal(false);
-    Geolocation.getCurrentPosition(
-      position => {
-        const { latitude, longitude } = position.coords;
 
-        if (buttonRes == 'start') {
-          onStartTask(latitude, longitude, taskid);
-        } else if (buttonRes == 'end_task') {
-          onEndTask(latitude, longitude, 'end_daily_task');
-        } else if (buttonRes == 'return_office') {
-          onEndTask(latitude, longitude, 'inside');
-        } else if (buttonRes == 'end_day') {
-          onEndTask(latitude, longitude, 'day_end');
-        } else {
-          onAddNewTask(latitude, longitude);
-        }
-      },
-      error => {
-        console.log('Error getting location', error);
-      },
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 },
+  const updateTaskStatus = useCallback((taskId, newStatus) => {
+    dispatch(updateTaskRequest({ taskId, status: newStatus }));
+  }, []);
+
+  const openPicker = useCallback(task => {
+    setPickerTask(task);
+    setSheetOpen(true);
+  }, []);
+
+  const handleStatusChange = useCallback((taskId, newStatus) => {
+    console.log(">>>>>>",taskId, newStatus);
+    
+    setTaskList(prev =>
+      prev.map(t => (t.id === taskId ? { ...t, status: newStatus } : t)),
     );
-  };
-
-  const onAddNewTask = async (lat, long) => {
-    setLoader(false);
-    if (!selectedTaskPurpose?.id) {
-      showErrorAlert('Please select task purpose');
-      setLoading(false);
-      return;
-    }
-    if (other_location === '') {
-      showErrorAlert('Please enter location details');
-      setLoading(false);
-      return;
-    }
-    if (selectedTaskPurpose?.title === 'Others' && other_purpose === '') {
-      showErrorAlert('Please enter other purpose details');
-      setLoading(false);
-      return;
-    }
-    if (!startDate) {
-      showErrorAlert('Please select start date');
-      setLoading(false);
-      return;
-    }
-    if (!endDate) {
-      showErrorAlert('Please select end date');
-      setLoading(false);
-      return;
-    }
-
-    // Combine date and time for validation
-    const startDateTime = new Date(startDate);
-    startDateTime.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
-
-    const endDateTime = new Date(endDate);
-    endDateTime.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
-
-    if (endDateTime < startDateTime) {
-      showErrorAlert('End date and time must be after start date and time');
-      setLoading(false);
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('location_id', selectedTaskPurpose?.id);
-    formData.append('task_name', other_location);
-    // formData.append('task_id', selectedTaskPurpose?.id);
-    formData.append('other_purpose', other_purpose);
-    formData.append('date', moment(new Date()).format('YYYY-MM-DD'));
-    formData.append('time', moment().format('HH:mm:ss'));
-    formData.append('createTaskDate', moment(startDate).format('YYYY-MM-DD'));
-    formData.append('endTaskDate', moment(endDate).format('YYYY-MM-DD'));
-    formData.append('start_time', moment(startTime).format('HH:mm:ss'));
-    formData.append('end_time', moment(endTime).format('HH:mm:ss'));
-    formData.append('latitude', lat);
-    formData.append('longitude', long);
-    // formData.append('address', actualAddress);
-    formData.append('status', 'approved');
-    formData.append('app_version', constants.APP_VERSION);
-
-    connectionrequest()
-      .then(() => {
-        dispatch(addTaskRequest(formData));
-      })
-      .catch(err => {
-        console.log(err);
-        showErrorAlert('Please connect to internet');
-      });
-  };
-  const onStartTask = async (lat, long, taskid) => {
-    setLoader(false);
-    let obj = {
-      id: taskid,
-      start_time: moment().format('HH:mm:ss'),
-      start_latitude: lat,
-      start_longitude: long,
-      // start_address: actualAddress,
-    };
-
-    connectionrequest()
-      .then(() => {
-        dispatch(startTaskRequest(obj));
-      })
-      .catch(err => {
-        console.log(err);
-        showErrorAlert('Please connect to internet');
-      });
-  };
-  const onDoTaskLater = async (task_submit_id, tracking_add) => {
-    setLoader(false);
-    let obj = {
-      task_submit_id: task_submit_id,
-      id: tracking_add,
-    };
-
-    connectionrequest()
-      .then(() => {
-        dispatch(taskDoItLaterRequest(obj));
-      })
-      .catch(err => {
-        console.log(err);
-        showErrorAlert('Please connect to internet');
-      });
-  };
-
-  const onEndTask = async (lat, long, remark) => {
-    setLoader(false);
-    let obj = {
-      id: taskTrackingId,
-      task_submit_id: taskSubmitId,
-      end_time: moment().format('HH:mm:ss'),
-      end_latitude: lat,
-      end_longitude: long,
-      // end_address: actualAddress,
-      task_tracking_remarks: remark,
-    };
-
-    connectionrequest()
-      .then(() => {
-        dispatch(endTaskRequest(obj));
-      })
-      .catch(err => {
-        console.log(err);
-        showErrorAlert('Please connect to internet');
-      });
-  };
-  const renderTaskList = ({ item, index }) => {
-    // Check if any task is currently ongoing across all tasks
-    const isAnyTaskOngoing = complitedTaskData.some(
-      task => task.latest_tracking_status === 'ongoing',
+    setSheetOpen(false);
+    dispatch(
+      updateTaskRequest({
+        taskId, // ← taskId in params
+        body: { status: newStatus }, // ← status in body (e.g. 'todo', 'in_progress', etc.)
+      }),
     );
+  }, []);
 
-    // Check if current date is between createTaskDate and endTaskDate
-    const currentDate = moment();
-    const startDate = moment(item?.createTaskDate);
-    const endDate = moment(item?.endTaskDate);
+console.log("Filter:", filter);
+console.log("TaskList:", taskList);
+console.log("TaskList Length:", taskList?.length);
 
-    // Condition 1: Show buttons only if current date is between task dates
-    const shouldShowButtons = currentDate.isBetween(
-      startDate,
-      endDate,
-      'day',
-      '[]',
-    );
+const filteredTasks =
+  filter === 'all'
+    ? taskList
+    : taskList.filter(t => t.status === filter);
 
-    // Additional condition: If task day is ended (has complete status for today), don't show buttons
-    const isTodayTaskEnded = item?.task_tracking?.some(
-      tracking =>
-        tracking.status === 'complete' &&
-        moment(tracking.created_at).isSame(currentDate, 'day'),
-    );
+console.log("Filtered Tasks:", filteredTasks);
 
-    // Final condition to show buttons: shouldShowButtons is true AND today's task is not ended
-    const showButtons = shouldShowButtons && !isTodayTaskEnded;
-
-    // Get current task's tracking status
-    const currentTaskStatus = item?.latest_tracking_status;
-
-    // Button states based on conditions
-    const getButtonStates = () => {
-      // Condition 2: If latest_tracking_status is null, End button should be disabled
-      if (currentTaskStatus === null) {
-        return {
-          startButtonDisabled: isAnyTaskOngoing, // Disabled if any other task is ongoing
-          startButtonOpacity: isAnyTaskOngoing ? 0.5 : 1,
-          endButtonDisabled: true, // Always disabled when status is null
-          endButtonOpacity: 0.5,
-          doLaterButtonDisabled: true, // Can't do later if not started
-          doLaterButtonOpacity: 0.5,
-        };
-      }
-
-      // Condition 3: If latest_tracking_status is "ongoing", End button visible and Start disabled
-      if (currentTaskStatus === 'ongoing') {
-        return {
-          startButtonDisabled: true, // Start disabled when task is ongoing
-          startButtonOpacity: 0.5,
-          endButtonDisabled: false, // End button enabled
-          endButtonOpacity: 1,
-          doLaterButtonDisabled: false, // Do later enabled when task is ongoing
-          doLaterButtonOpacity: 1,
-        };
-      }
-
-      // For other statuses (complete, etc.)
-      return {
-        startButtonDisabled:
-          isAnyTaskOngoing || currentTaskStatus === 'complete',
-        startButtonOpacity:
-          isAnyTaskOngoing || currentTaskStatus === 'complete' ? 0.5 : 1,
-        endButtonDisabled: true,
-        endButtonOpacity: 0.5,
-        doLaterButtonDisabled: true,
-        doLaterButtonOpacity: 0.5,
-      };
-    };
-
-    const buttonStates = getButtonStates();
-
-    return (
-      <View
-        style={[
-          styles.userInfoContainer,
-          {
-            backgroundColor:
-              item?.status == 'approved'
-                ? Colors.lightgreen
-                : item?.status == 'pending'
-                ? Colors.lightred
-                : item?.status == 'ongoing'
-                ? Colors.lightYellow
-                : item?.status == 'complete'
-                ? Colors.lightgreen
-                : Colors.lightred,
-          },
-        ]}
-      >
-        <View style={styles.userTextContainer}>
-          <Text style={styles.blackText}>
-            Visit Location :{' '}
-            <Text style={styles.redText}>
-              {item?.task_name ? item?.task_name : ''}
-            </Text>
-          </Text>
-          <Text style={styles.blackText}>
-            Visit Purpose :{' '}
-            <Text style={styles.redText}>
-              {item?.task_title ? item?.task_title : ''}
-            </Text>
-          </Text>
-          <Text style={styles.blackText}>
-            Start Date :{' '}
-            <Text style={styles.redText}>
-              {moment(item?.createTaskDate).format('ddd, MMM D, YYYY')},
-              {item?.start_time}
-            </Text>
-          </Text>
-          <Text style={styles.blackText}>
-            End Date :{' '}
-            <Text style={styles.redText}>
-              {moment(item?.endTaskDate).format('ddd, MMM D, YYYY')},
-              {item?.end_time}
-            </Text>
-          </Text>
-          <Text style={styles.blackText}>
-            Status :{' '}
-            <Text
-              style={[
-                styles.redText,
-                {
-                  color: item?.status == 'rejected' ? Colors.red : Colors.green,
-                  textTransform: 'capitalize',
-                },
-              ]}
-            >
-              {item?.latest_tracking_status || 'Approved'}
-            </Text>
-          </Text>
-          <Text style={styles.blackText}>
-            Day :{' '}
-            <Text
-              style={[
-                styles.redText,
-                {
-                  color:
-                    item?.latest_tracking_status === 'ongoing'
-                      ? Colors.red
-                      : Colors.black,
-                  textTransform: 'capitalize',
-                },
-              ]}
-            >
-              {item?.task_activity}
-            </Text>
-          </Text>
-
-          {/* Display task tracking history */}
-          {item?.task_tracking && item.task_tracking.length > 0 && (
-            <View style={{ marginTop: 10 }}>
-              <Text style={[styles.blackText, { fontWeight: 'bold' }]}>
-                Tracking History:
-              </Text>
-              {item.task_tracking.map((tracking, trackingIndex) => (
-                <Text
-                  key={trackingIndex}
-                  style={[styles.blackText, { fontSize: 12, marginLeft: 10 }]}
-                >
-                  • {moment(tracking.created_at).format('MMM D, YYYY')} -{' '}
-                  {tracking.status.toUpperCase()} - Start: {tracking.start_time}
-                  {tracking.end_time
-                    ? ` | End: ${tracking.end_time} | Duration: ${tracking.task_duration}`
-                    : ' (In Progress)'}
-                </Text>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Show buttons only if showButtons condition is met (shouldShowButtons is true AND today's task is not ended) */}
-        {showButtons && (
-          <>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                width: '100%',
-                alignItems: 'center',
-              }}
-            >
-              {/* Start Task Button */}
-              <Button
-                height={normalize(45)}
-                width={'48%'}
-                marginTop={normalize(25)}
-                backgroundColor={Colors.green}
-                title={'Start Task'}
-                fontSize={normalize(15)}
-                fontFamily={Fonts.MulishSemiBold}
-                textColor={'white'}
-                opacity={buttonStates.startButtonOpacity}
-                disabled={buttonStates.startButtonDisabled}
-                onPress={() => {
-                  if (
-                    ProfileReducer?.attendenceStatusResponse
-                      ?.is_attendance_given != 0
-                  ) {
-                    getLocation(item?.task_submit_id, 'start');
-                  } else {
-                    Alert.alert('Please Clock in first to start your day');
-                  }
-                }}
-              />
-
-              {/* End Task Button */}
-              <Button
-                height={normalize(45)}
-                marginTop={normalize(25)}
-                width={'48%'}
-                backgroundColor={Colors.red}
-                title={'End Task'}
-                fontSize={normalize(15)}
-                fontFamily={Fonts.MulishSemiBold}
-                textColor={'white'}
-                opacity={buttonStates.endButtonOpacity}
-                disabled={buttonStates.endButtonDisabled}
-                onPress={() => {
-                  // Get the current ongoing task tracking ID
-                  const ongoingTracking = item?.task_tracking?.find(
-                    tracking => tracking.status === 'ongoing',
-                  );
-
-                  setTaskSubmitId(item?.task_submit_id);
-                  setTaskTrackingId(
-                    ongoingTracking?.task_tracking_id || item?.task_tracking_id,
-                  );
-                  setTaskAction('end');
-                  setEndTaskModal(true);
-                }}
-              />
-            </View>
-
-            {/* Do it later Button */}
-            <Button
-              height={normalize(45)}
-              width={'100%'}
-              marginTop={normalize(5)}
-              backgroundColor={Colors.skyblue}
-              title={'Do it later'}
-              fontSize={normalize(15)}
-              fontFamily={Fonts.MulishSemiBold}
-              textColor={'white'}
-              opacity={buttonStates.doLaterButtonOpacity}
-              disabled={buttonStates.doLaterButtonDisabled}
-              onPress={() => {
-                // Get the current ongoing task tracking ID
-                const ongoingTracking = item?.task_tracking?.find(
-                  tracking => tracking.status === 'ongoing',
-                );
-
-                setTaskSubmitId(item?.task_submit_id);
-                setTaskTrackingId(
-                  ongoingTracking?.task_tracking_id || item?.task_tracking_id,
-                );
-
-                Alert.alert('Are you sure', 'You want to do this later ?', [
-                  {
-                    text: 'No',
-                    onPress: () => console.log('Cancel Pressed'),
-                    style: 'cancel',
-                  },
-                  {
-                    text: 'Yes',
-                    onPress: () => {
-                      onDoTaskLater(
-                        item?.task_submit_id,
-                        ongoingTracking?.task_tracking_id ||
-                          item?.task_tracking_id,
-                      );
-                    },
-                  },
-                ]);
-              }}
-            />
-          </>
-        )}
-      </View>
-    );
-  };
-
-  useEffect(() => {
-    if (ProfileReducer?.taskLocationResponse?.length > 0) {
-      let filteredLocations = ProfileReducer.taskLocationResponse;
-
-      // Filter for high priority locations if attendance status is "Clocked In Other"
-      if (
-        ProfileReducer?.attendenceStatusResponse?.attendance_status_text ===
-        'Clocked In Other'
-      ) {
-        filteredLocations = ProfileReducer.taskLocationResponse.filter(
-          location => location.priority === 'high',
-        );
-      }
-
-      setTaskLocation(filteredLocations);
-    }
-  }, [
-    ProfileReducer.taskLocationResponse,
-    ProfileReducer.attendenceStatusResponse,
-  ]);
-
-  useEffect(() => {
-    if (ProfileReducer?.taskListResponse?.length > 0) {
-      setTaskPurposeList(ProfileReducer.taskListResponse);
-    }
-  }, [ProfileReducer.taskListResponse]);
-
-  useEffect(() => {
-    if (ProfileReducer?.complitedTaskResponse?.length > 0) {
-      setComplitedTaskData(ProfileReducer.complitedTaskResponse);
-      dispatch(attendenceStatusRequest());
-    }
-  }, [ProfileReducer.complitedTaskResponse]);
-
-  if (status == '' || ProfileReducer.status != status) {
+  const renderItem = useCallback(
+    ({ item }) => <TaskCard item={item} onOpenPicker={openPicker} />,
+    [openPicker],
+  );
+  if (status === '' || ProfileReducer.status !== status) {
     switch (ProfileReducer.status) {
-      case 'Profile/taskLocationRequest':
-        status = ProfileReducer.status;
-        break;
-      case 'Profile/taskLocationSuccess':
-        status = ProfileReducer.status;
-
-        break;
-      case 'Profile/taskLocationFailure':
-        status = ProfileReducer.status;
-        break;
       case 'Profile/taskListRequest':
         status = ProfileReducer.status;
         break;
       case 'Profile/taskListSuccess':
         status = ProfileReducer.status;
-
+        setTaskList(ProfileReducer?.taskListResponse);
+        console.log("Kick TASK==>>>>",ProfileReducer?.taskListResponse);
+        
         break;
       case 'Profile/taskListFailure':
         status = ProfileReducer.status;
-        showErrorAlert('Something went wrong!');
         break;
-      case 'Profile/complitedTaskListRequest':
-        status = ProfileReducer.status;
-
-        setComplitedTaskData([]);
-        break;
-      case 'Profile/complitedTaskListSuccess':
-        status = ProfileReducer.status;
-
-        break;
-      case 'Profile/complitedTaskListFailure':
-        status = ProfileReducer.status;
-        showErrorAlert('Something went wrong! ');
-        break;
-      case 'Profile/addTaskRequest':
+      case 'Profile/updateTaskRequest':
         status = ProfileReducer.status;
         break;
-      case 'Profile/addTaskSuccess':
+      case 'Profile/updateTaskSuccess':
         status = ProfileReducer.status;
-
-        setLoading(false);
-        setAddTaskModal(false);
-
-        // Reset form fields
-        setSelectedTasklocatio('');
-        setSelectedTaskPurpose('');
-        setOther_location('');
-        setOther_purpose('');
-        setStartDate(new Date());
-        setEndDate(new Date());
-        setStartTime(new Date());
-        setEndTime(new Date());
-        dispatch(complitedTaskListRequest(`approved,ongoing,complete`));
-        dispatch(attendenceStatusRequest());
-
+        dispatch(taskListRequest())
         break;
-      case 'Profile/addTaskFailure':
+      case 'Profile/updateTaskFailure':
         status = ProfileReducer.status;
-        setLoading(false);
-        showErrorAlert('Task add fail due to Network issue, Try again!');
-        break;
-      case 'Profile/startTaskRequest':
-        status = ProfileReducer.status;
-        break;
-      case 'Profile/startTaskSuccess':
-        status = ProfileReducer.status;
-
-        dispatch(complitedTaskListRequest(`approved,ongoing,complete`));
-        dispatch(attendenceStatusRequest());
-
-        break;
-      case 'Profile/startTaskFailure':
-        status = ProfileReducer.status;
-        showErrorAlert('Task add fail due to Network issue, Try again!');
-        break;
-      case 'Profile/endTaskRequest':
-        status = ProfileReducer.status;
-        break;
-      case 'Profile/endTaskSuccess':
-        status = ProfileReducer.status;
-
-        dispatch(complitedTaskListRequest(`approved,ongoing,complete`));
-        dispatch(attendenceStatusRequest());
-
-        break;
-      case 'Profile/endTaskFailure':
-        status = ProfileReducer.status;
-        showErrorAlert('Task add fail due to Network issue, Try again!');
-        break;
-
-      case 'Profile/taskDoItLaterRequest':
-        status = ProfileReducer.status;
-        break;
-      case 'Profile/taskDoItLaterSuccess':
-        status = ProfileReducer.status;
-        dispatch(complitedTaskListRequest(`approved,ongoing,complete`));
-        dispatch(attendenceStatusRequest());
-        break;
-      case 'Profile/taskDoItLaterFailure':
-        status = ProfileReducer.status;
-        showErrorAlert('Task add fail due to Network issue, Try again!');
         break;
     }
   }
-
   return (
-    <View style={styles.container}>
+    <View style={scr.root}>
+      <StatusBar barStyle="dark-content" />
       <Header
         HeaderLogo
         Title
         placeText={'My Daily Task'}
-        onPress_back_button={() => navigation.goBack()}
+        onPress_back_button={() => props.navigation?.goBack()}
       />
 
       <Loader
         visible={
-          // loader ||
-          ProfileReducer?.status == 'Profile/taskLocationRequest' ||
-          ProfileReducer?.status == 'Profile/taskListRequest' ||
-          ProfileReducer?.status == 'Profile/complitedTaskListRequest' ||
-          ProfileReducer?.status == 'Profile/addTaskRequest'
+          ProfileReducer?.status === 'Profile/taskListRequest' ||
+          ProfileReducer?.status === 'Profile/updateTaskRequest'
         }
       />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
+
+      <StatsBar tasks={taskList} />
+      <FilterBar active={filter} onChange={setFilter} tasks={taskList} />
+
+      <FlatList
+        data={filteredTasks}
+        renderItem={renderItem}
+        keyExtractor={item => String(item.id)}
+        contentContainerStyle={scr.list}
+        ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
         showsVerticalScrollIndicator={false}
-      >
-        <FlatList
-          data={complitedTaskData}
-          keyExtractor={item => item.id}
-          renderItem={renderTaskList}
-          showsVerticalScrollIndicator={false}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-        />
-      </ScrollView>
-      
-      <TouchableOpacity
-        style={{
-          backgroundColor: Colors.skyblue,
-          position: 'absolute',
-          borderRadius: 100,
-          padding: normalize(15),
-          right: 20,
-          bottom: 150,
-          borderWidth: 1,
-        }}
-        onPress={() => {
-          if (
-            (ProfileReducer?.attendenceStatusResponse
-              ?.attendance_status_text === 'Clocked In Other' &&
-              ProfileReducer?.attendenceStatusResponse?.status === 'pending') ||
-            ProfileReducer?.attendenceStatusResponse?.is_attendance_given == 0
-          ) {
-            Alert.alert(
-              'You are not allowed to add daily task.',
-              ProfileReducer?.attendenceStatusResponse?.is_attendance_given == 0
-                ? 'Please Clock in first'
-                : 'Please ask for Approval',
-            );
-          } else if (
-            ProfileReducer?.attendenceStatusResponse?.attendance_status_text ===
-              'Clocked Out Outside' ||
-            ProfileReducer?.attendenceStatusResponse?.attendance_status_text ===
-              'Clocked Out Inside' ||
-            ProfileReducer?.attendenceStatusResponse?.attendance_status_text ===
-              'Clocked Out Other' ||
-            ProfileReducer?.attendenceStatusResponse?.is_attendence_allowed ===
-              false
-          ) {
-            Alert.alert(
-              'You are not allowed to add daily task.',
-              'You already clocked Out',
-            );
-          } else {
-            setAddTaskModal(true);
-          }
-        }}
-      >
-        <Image
-          resizeMode="contain"
-          source={Images.addTask}
-          style={{
-            width: normalize(20),
-            height: normalize(20),
-            tintColor: Colors.white,
-          }}
-        />
-      </TouchableOpacity>
-
-      <Modal
-        animationIn={'slideInUp'}
-        animationOut={'slideOutDown'}
-        backdropTransitionOutTiming={0}
-        backdropOpacity={0.7}
-        hideModalContentWhileAnimating={true}
-        isVisible={endTaskModal}
-        animationInTiming={800}
-        animationOutTiming={1000}
-        onBackdropPress={() => setEndTaskModal(false)}
-      >
-        <ImageBackground
-          resizeMode="stretch"
-          // source={Images.pageBackground}
-          style={[styles.modalContainer, { backgroundColor: Colors.bgColor }]}
-        >
-          <TouchableOpacity
-            style={styles.close}
-            onPress={() => {
-              setEndTaskModal(false);
-            }}
-          >
-            <Image
-              resizeMode="contain"
-              source={Images.close}
-              style={{ height: normalize(10), width: normalize(10) }}
-            />
-          </TouchableOpacity>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.modalScrollContent,
-              { paddingTop: 70 },
-            ]}
-          >
-            <Image
-              resizeMode="contain"
-              style={{
-                alignSelf: 'center',
-                height: normalize(50),
-                width: normalize(50),
-                marginTop: -50,
-              }}
-              source={Images.app_logo}
-            />
-
-            <Text
-              style={{
-                textAlign: 'center',
-                fontFamily: Fonts.MulishExtraBold,
-                fontSize: 22,
-                color: Colors.white,
-                marginBottom: normalize(15),
-                marginTop: normalize(20),
-              }}
-            >
-              About to end task...
+        ListEmptyComponent={
+          <View style={scr.empty}>
+            <Text style={scr.emptyIcon}>📋</Text>
+            <Text style={scr.emptyTitle}>No tasks here</Text>
+            <Text style={scr.emptyBody}>
+              {filter === 'all'
+                ? 'Tasks assigned to you will appear here'
+                : `No tasks with "${FILTER_LABELS[filter]}" status`}
             </Text>
+          </View>
+        }
+      />
 
-            <TouchableOpacity
-              style={[
-                styles.clockButton,
-                {
-                  backgroundColor: '#ff7973',
-                },
-              ]}
-              onPress={() => {
-                getLocation('inside', 'end_task');
-              }}
-            >
-              <Text style={[styles.clockButtonText]}>End this task</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.clockButton,
-                {
-                  backgroundColor: Colors.skyblue,
-                },
-              ]}
-              onPress={() => {
-                getLocation('inside', 'return_office');
-              }}
-            >
-              <Text style={styles.clockButtonText}>Returned to office</Text>
-            </TouchableOpacity>
-            {/* <TouchableOpacity
-              style={[
-                styles.clockButton,
-                {
-                  backgroundColor: Colors.red,
-                },
-              ]}
-              onPress={() => {
-                getLocation('inside', 'end_day');
-              }}
-            >
-              <Text style={styles.clockButtonText}>End day</Text>
-            </TouchableOpacity> */}
-          </ScrollView>
-        </ImageBackground>
-      </Modal>
-
-      <Modal
-        animationIn={'slideInUp'}
-        animationOut={'slideOutDown'}
-        backdropTransitionOutTiming={0}
-        backdropOpacity={0.7}
-        hideModalContentWhileAnimating={true}
-        isVisible={addTaskModal}
-        animationInTiming={800}
-        animationOutTiming={1000}
-        onBackdropPress={() => setAddTaskModal(false)}
-      >
-        <ImageBackground
-          resizeMode="stretch"
-          source={Images.drawerbg}
-          style={styles.modalContainer}
-        >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.modalScrollContent}
-          >
-            <TouchableOpacity
-              style={styles.close}
-              onPress={() => {
-                setAddTaskModal(false);
-              }}
-            >
-              <Image
-                resizeMode="contain"
-                source={Images.close}
-                style={{ height: normalize(10), width: normalize(10) }}
-              />
-            </TouchableOpacity>
-
-            <Text style={styles.modalTitle}>Add New Task</Text>
-
-            <Text style={styles.fieldLabel}>
-              Describe where are you visiting
-            </Text>
-            <View style={styles.dropdownContainer}>
-              <TextInputWithButton
-                show={true}
-                icon={true}
-                height={normalize(100)}
-                inputWidth={'100%'}
-                marginTop={normalize(2)}
-                backgroundColor={Colors.white}
-                textColor={Colors.textInputColor}
-                InputHeaderText={'Describe'}
-                placeholder={'Describe'}
-                inputheight={normalize(95)}
-                placeholderTextColor={Colors.black}
-                paddingLeft={normalize(25)}
-                borderColor={Colors.skyblue}
-                borderRadius={normalize(5)}
-                editable={true}
-                fontFamily={Fonts.MulishRegular}
-                isheadertext={true}
-                value={other_location}
-                fontSize={normalize(14)}
-                headertxtsize={normalize(13)}
-                multiline
-                onChangeText={e => setOther_location(e)}
-                tintColor={Colors.tintGrey}
-              />
-            </View>
-
-            <Text style={styles.fieldLabel}>Select visit purpose</Text>
-            <View style={styles.dropdownContainer}>
-              <Dropdown
-                style={[
-                  styles.dropdown,
-                  isFocusTask2 && { borderColor: '#24bcf7' },
-                ]}
-                placeholderStyle={styles.placeholderStyle}
-                selectedTextStyle={styles.selectedTextStyle}
-                inputSearchStyle={styles.inputSearchStyle}
-                iconStyle={styles.iconStyle}
-                containerStyle={styles.dropdownListContainer}
-                itemTextStyle={styles.dropdownItemText}
-                data={TaskPurposeList}
-                maxHeight={300}
-                labelField="title"
-                valueField="id"
-                placeholder={!isFocusTask2 ? 'Select purpose' : '...'}
-                searchPlaceholder="Search..."
-                value={selectedTaskPurpose?.id}
-                onFocus={() => setIsFocusTask2(true)}
-                onBlur={() => setIsFocusTask2(false)}
-                onChange={handleTaskPurposeSelect}
-                renderLeftIcon={() => <Text style={styles.icon}>📋</Text>}
-              />
-              {selectedTaskPurpose?.title == 'Others' && (
-                <TextInputWithButton
-                  show={true}
-                  icon={true}
-                  height={normalize(45)}
-                  inputWidth={'100%'}
-                  backgroundColor={Colors.white}
-                  marginTop={normalize(25)}
-                  textColor={Colors.textInputColor}
-                  InputHeaderText={'Other purpose'}
-                  placeholder={'Other purpose'}
-                  placeholderTextColor={Colors.black}
-                  paddingLeft={normalize(25)}
-                  borderColor={Colors.skyblue}
-                  borderRadius={normalize(5)}
-                  editable={true}
-                  fontFamily={Fonts.MulishRegular}
-                  isheadertext={true}
-                  value={other_purpose}
-                  fontSize={normalize(14)}
-                  headertxtsize={normalize(13)}
-                  onChangeText={e => setOther_purpose(e)}
-                  tintColor={Colors.tintGrey}
-                />
-              )}
-            </View>
-
-            {/* Start Date and Time Section */}
-            <Text style={styles.fieldLabel}>Start Date *</Text>
-            <View style={styles.dateTimeContainer}>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowStartDatePicker(true)}
-              >
-                <Text style={styles.dateTimeButtonText}>
-                  📅 {moment(startDate).format('DD/MM/YYYY')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowStartTimePicker(true)}
-              >
-                <Text style={styles.dateTimeButtonText}>
-                  🕐 {moment(startTime).format('HH:mm')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* End Date and Time Section */}
-            <Text style={styles.fieldLabel}>End Date *</Text>
-            <View style={styles.dateTimeContainer}>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowEndDatePicker(true)}
-              >
-                <Text style={styles.dateTimeButtonText}>
-                  📅 {moment(endDate).format('DD/MM/YYYY')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowEndTimePicker(true)}
-              >
-                <Text style={styles.dateTimeButtonText}>
-                  🕐 {moment(endTime).format('HH:mm')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.clockButton,
-                {
-                  backgroundColor: Colors.orange,
-                },
-              ]}
-              onPress={() => {
-                getLocation();
-              }}
-            >
-              <Text style={styles.clockButtonText}>Submit</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </ImageBackground>
-      </Modal>
-
-      {/* Date/Time Pickers */}
-      {showStartDatePicker && (
-        <DateTimePicker
-          testID="startDatePicker"
-          value={startDate}
-          mode="date"
-          is24Hour={true}
-          display="default"
-          onChange={onStartDateChange}
-        />
-      )}
-      {showEndDatePicker && (
-        <DateTimePicker
-          testID="endDatePicker"
-          value={endDate}
-          mode="date"
-          is24Hour={true}
-          display="default"
-          onChange={onEndDateChange}
-        />
-      )}
-      {showStartTimePicker && (
-        <DateTimePicker
-          testID="startTimePicker"
-          value={startTime}
-          mode="time"
-          // is24Hour={true}
-          display="default"
-          onChange={onStartTimeChange}
-        />
-      )}
-      {showEndTimePicker && (
-        <DateTimePicker
-          testID="endTimePicker"
-          value={endTime}
-          mode="time"
-          // is24Hour={true}
-          display="default"
-          onChange={onEndTimeChange}
-        />
-      )}
+      <StatusSheet
+        visible={sheetOpen}
+        task={pickerTask}
+        onSelect={handleStatusChange}
+        onClose={() => setSheetOpen(false)}
+      />
     </View>
   );
 };
 
-export default AttendenceReport;
+export default ActiveTask;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: Colors.bgColor,
-  },
-  mainContainer: {
-    flex: 1,
-    backgroundColor: Colors.white,
-  },
-  close: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: Colors.white,
-    borderRadius: 50,
-    padding: 5,
-    height: normalize(20),
-    width: normalize(20),
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  modalContainer: {
-    maxHeight: '90%',
-    justifyContent: 'center',
-    borderRadius: normalize(8),
-    overflow: 'hidden',
-  },
-  modalScrollContent: {
-    padding: normalize(20),
-    paddingTop: normalize(40),
-  },
-  modalTitle: {
-    textAlign: 'center',
-    fontFamily: Fonts.MulishExtraBold,
-    fontSize: 24,
-    color: Colors.white,
-    marginBottom: normalize(30),
-  },
-  fieldLabel: {
-    textAlign: 'left',
-    fontFamily: Fonts.MulishBold,
-    fontSize: 16,
-    color: Colors.white,
-    marginBottom: 5,
-  },
-  scrollView: {
-    flex: 1,
-    backgroundColor: '#34495e',
-  },
-  scrollViewContent: {
-    paddingHorizontal: normalize(10),
-    paddingVertical: normalize(10),
-    paddingBottom: normalize(100),
-  },
-  userInfoContainer: {
-    width: '100%',
-    padding: normalize(10),
-    backgroundColor: Colors.white,
-    borderRadius: normalize(8),
-    marginBottom: normalize(10),
-  },
-  userTextContainer: {
-    width: '100%',
-  },
-  userName: {
-    fontFamily: Fonts.MulishExtraBold,
-    fontSize: 20,
-  },
-  newTask: {
-    fontFamily: Fonts.MulishBold,
-    fontSize: 16,
-    color: Colors.black,
-    marginTop: normalize(5),
-  },
-  userAddress: {
-    fontFamily: Fonts.MulishSemiBold,
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 5,
-  },
-  blackText: {
-    fontFamily: Fonts.MulishSemiBold,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 5,
-    color: Colors.black,
-  },
-  redText: {
-    fontFamily: Fonts.MulishRegular,
-    fontSize: 16,
-    marginTop: 5,
-    color: Colors.black,
-  },
-  todayText: {
-    fontFamily: Fonts.MulishSemiBold,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 5,
-    color: Colors.green,
-  },
-  imageContainer: {
-    borderWidth: normalize(2),
-    borderRadius: normalize(15),
-    borderColor: Colors.skyblue,
-    height: normalize(100),
-    width: normalize(80),
-    overflow: 'hidden',
-  },
-  userImage: {
-    height: normalize(150),
-    width: normalize(110),
-  },
-  userImagePlaceholder: {
-    alignSelf: 'center',
-    height: normalize(100),
-    width: normalize(80),
-  },
-  mapSection: {
-    width: '100%',
-    padding: normalize(5),
-    backgroundColor: Colors.white,
-    borderRadius: normalize(8),
-    marginBottom: normalize(15),
-  },
-  mapContainer: {
-    height: normalize(300),
-    width: '100%',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderRadius: 8,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  mapImage: {
-    height: normalize(300),
-    width: '100%',
-  },
-  clockButton: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: normalize(50),
-    borderRadius: normalize(8),
-    marginBottom: normalize(20),
-    marginTop: normalize(20),
-  },
-  clockButtonText: {
-    fontFamily: Fonts.MulishSemiBold,
-    fontSize: 20,
-    fontWeight: '900',
-    color: Colors.white,
-  },
-  dropdownContainer: {
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 20,
-  },
-  dropdown: {
-    height: 50,
-    width: '100%',
-    borderColor: '#2494ea',
-    borderWidth: 2,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    backgroundColor: 'white',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-  },
-  placeholderStyle: {
-    fontSize: 16,
-    color: Colors.black,
-    fontFamily: Fonts.MulishRegular,
-  },
-  selectedTextStyle: {
-    fontSize: 16,
-    color: Colors.black,
-    fontFamily: Fonts.MulishSemiBold,
-  },
-  inputSearchStyle: {
-    height: 40,
-    fontSize: 16,
-    color: Colors.black,
-    fontFamily: Fonts.MulishRegular,
-  },
-  iconStyle: {
-    width: 20,
-    height: 20,
-  },
-  dropdownListContainer: {
-    backgroundColor: Colors.greytext,
-    borderRadius: 8,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  dropdownItemText: {
-    color: '#000000',
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const scr = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#F8FAFC' },
+  list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
+  empty: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 32 },
+  emptyIcon: { fontSize: 44, marginBottom: 12 },
+  emptyTitle: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 6,
   },
-  icon: {
-    marginRight: 10,
-    fontSize: 18,
+  emptyBody: {
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 20,
   },
-  // New styles for date/time pickers
-  dateTimeContainer: {
+});
+
+const cs = StyleSheet.create({
+  // 3D shadow layers (positioned behind card via margins)
+  cardShadowBot: {
+    position: 'absolute',
+    bottom: -5,
+    left: 4,
+    right: 4,
+    height: '100%',
+    borderRadius: 16,
+    zIndex: 0,
+  },
+  cardShadowMid: {
+    position: 'absolute',
+    bottom: -3,
+    left: 2,
+    right: 2,
+    height: '100%',
+    borderRadius: 15,
+    zIndex: 1,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    zIndex: 2,
+    marginBottom: 5,
+  },
+  topStrip: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 20,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingRight: 12,
   },
-  dateTimeButton: {
+  accentBar: {
+    width: 4,
+    alignSelf: 'stretch',
+    borderRadius: 2,
+    marginRight: 10,
+    marginLeft: 0,
+  },
+  stripContent: {
     flex: 1,
-    height: 50,
-    backgroundColor: Colors.white,
-    borderColor: '#2494ea',
-    borderWidth: 2,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    paddingLeft: 10,
-    marginHorizontal: 5,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  dateTimeButtonText: {
+  cardTitle: { flex: 1, fontSize: 14, fontWeight: '700', marginRight: 8 },
+  priorityPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  priorityText: { fontSize: 11, fontWeight: '600' },
+  cardBody: { paddingHorizontal: 14, paddingBottom: 12, paddingTop: 6 },
+  cardDesc: { fontSize: 12, color: '#94A3B8', lineHeight: 18, marginBottom: 8 },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  statusIcon: { fontSize: 12, fontWeight: '700', marginRight: 4 },
+  statusLabel: { fontSize: 12, fontWeight: '600' },
+  statusChevron: {
     fontSize: 16,
-    color: Colors.black,
-    fontFamily: Fonts.MulishSemiBold,
-    textAlign: 'left',
+    fontWeight: '700',
+    opacity: 0.6,
+    marginLeft: 2,
   },
+  metaRow: { flexDirection: 'row', alignItems: 'center' },
+  labelChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    marginLeft: 4,
+  },
+  labelText: { fontSize: 10, fontWeight: '600' },
+  dueText: { fontSize: 11, color: '#94A3B8', marginLeft: 4 },
+  dueDateOverdue: { color: '#EF4444', fontWeight: '600' },
+});
+
+const sb = StyleSheet.create({
+  wrap: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E2E8F0',
+  },
+  statRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  statItem: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  statNum: { fontSize: 18, fontWeight: '700' },
+  statLabel: { fontSize: 10, color: '#94A3B8', marginTop: 1 },
+  progBg: {
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progFill: { height: 4, backgroundColor: '#3B82F6', borderRadius: 2 },
+  progText: { fontSize: 11, color: '#94A3B8' },
+});
+
+const fb = StyleSheet.create({
+  wrapper: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E2E8F0',
+  },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    marginRight: 6,
+  },
+  chipActive: { backgroundColor: '#EFF6FF', borderColor: '#93C5FD' },
+  chipText: { fontSize: 12, fontWeight: '500', color: '#64748B' },
+  chipTextActive: { color: '#2563EB' },
+  badge: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginLeft: 5,
+  },
+  badgeActive: { backgroundColor: '#BFDBFE' },
+  badgeText: { fontSize: 10, fontWeight: '600', color: '#64748B' },
+  badgeTextActive: { color: '#1D4ED8' },
+});
+
+const ss = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    paddingBottom: 8,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F1F5F9',
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  sheetTask: { fontSize: 12, color: '#94A3B8', marginTop: 2, maxWidth: 240 },
+  closeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtnText: { fontSize: 12, color: '#64748B', fontWeight: '700' },
+  statusOpt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    gap: 12,
+    borderRadius: 12,
+    marginHorizontal: 8,
+    marginTop: 2,
+  },
+  optIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optIcon: { fontSize: 17, fontWeight: '700' },
+  optInfo: { flex: 1 },
+  optName: { fontSize: 14, fontWeight: '500', color: '#1E293B' },
+  optDesc: { fontSize: 12, color: '#94A3B8', marginTop: 1 },
+  checkCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkMark: { fontSize: 13, fontWeight: '700' },
 });

@@ -10,6 +10,7 @@ const initialState = {
   clockoutResponse: {},
   profileUpdateResponse: {},
   taskListResponse: {},
+  updateTaskResponse: {},
   complitedTaskResponse: {},
   addTaskResponse: {},
   applyLeaveResponse: {},
@@ -106,37 +107,14 @@ const ProfileSlice = createSlice({
       state.status = action.type;
     },
 
-    complitedTaskListRequest(state, action) {
+    updateTaskRequest(state, action) {
       state.status = action.type;
     },
-    complitedTaskListSuccess(state, action) {
-      state.complitedTaskResponse = action.payload;
+    updateTaskSuccess(state, action) {
+      state.updateTaskResponse = action.payload;
       state.status = action.type;
     },
-    complitedTaskListFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-
-    taskApprovalListRequest(state, action) {
-      state.status = action.type;
-    },
-    taskApprovalListSuccess(state, action) {
-      state.taskApprovalListResponse = action.payload;
-      state.status = action.type;
-    },
-    taskApprovalListFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-    addTaskRequest(state, action) {
-      state.status = action.type;
-    },
-    addTaskSuccess(state, action) {
-      state.addTaskResponse = action.payload;
-      state.status = action.type;
-    },
-    addTaskFailure(state, action) {
+    updateTaskFailure(state, action) {
       state.error = action.error;
       state.status = action.type;
     },
@@ -152,42 +130,7 @@ const ProfileSlice = createSlice({
       state.error = action.error;
       state.status = action.type;
     },
-    municipalityRegisterRequest(state, action) {
-      state.status = action.type;
-    },
-    municipalityRegisterSuccess(state, action) {
-      state.applyLeaveResponse = action.payload;
-      state.status = action.type;
-    },
-    municipalityRegisterFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-
-    municipalityRegisterListRequest(state, action) {
-      state.status = action.type;
-    },
-    municipalityRegisterListSuccess(state, action) {
-      state.municipalityRegisterListResponse = action.payload;
-      state.status = action.type;
-    },
-    municipalityRegisterListFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-
-    municipalityOfficeListRequest(state, action) {
-      state.status = action.type;
-    },
-    municipalityOfficeListSuccess(state, action) {
-      state.municipalityOfficeListResponse = action.payload;
-      state.status = action.type;
-    },
-    municipalityOfficeListFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-
+   
     leaveLogRequest(state, action) {
       state.status = action.type;
     },
@@ -223,42 +166,7 @@ const ProfileSlice = createSlice({
       state.status = action.type;
     },
 
-    taskLocationRequest(state, action) {
-      state.status = action.type;
-    },
-    taskLocationSuccess(state, action) {
-      state.taskLocationResponse = action.payload;
-      state.status = action.type;
-    },
-    taskLocationFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-
-    startTaskRequest(state, action) {
-      state.status = action.type;
-    },
-    startTaskSuccess(state, action) {
-      state.startTaskResponse = action.payload;
-      state.status = action.type;
-    },
-    startTaskFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-
-    endTaskRequest(state, action) {
-      state.status = action.type;
-    },
-    endTaskSuccess(state, action) {
-      state.endTaskResponse = action.payload;
-      state.status = action.type;
-    },
-    endTaskFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
-
+   
     attendenceReportRequest(state, action) {
       state.status = action.type;
     },
@@ -271,17 +179,6 @@ const ProfileSlice = createSlice({
       state.status = action.type;
     },
 
-    taskDoItLaterRequest(state, action) {
-      state.status = action.type;
-    },
-    taskDoItLaterSuccess(state, action) {
-      state.taskDoItLaterResponse = action.payload;
-      state.status = action.type;
-    },
-    taskDoItLaterFailure(state, action) {
-      state.error = action.error;
-      state.status = action.type;
-    },
 
     holidayListRequest(state, action) {
       state.status = action.type;
@@ -358,13 +255,9 @@ export const {
   taskListSuccess,
   taskListFailure,
 
-  complitedTaskListRequest,
-  complitedTaskListSuccess,
-  complitedTaskListFailure,
-
-  taskApprovalListRequest,
-  taskApprovalListSuccess,
-  taskApprovalListFailure,
+  updateTaskRequest,
+  updateTaskSuccess,
+  updateTaskFailure,
 
   addTaskRequest,
   addTaskSuccess,
@@ -373,18 +266,6 @@ export const {
   applyLeaveRequest,
   applyLeaveSuccess,
   applyLeaveFailure,
-
-  municipalityRegisterRequest,
-  municipalityRegisterSuccess,
-  municipalityRegisterFailure,
-
-  municipalityRegisterListRequest,
-  municipalityRegisterListSuccess,
-  municipalityRegisterListFailure,
-
-  municipalityOfficeListRequest,
-  municipalityOfficeListSuccess,
-  municipalityOfficeListFailure,
 
   leaveLogRequest,
   leaveLogSuccess,
@@ -398,25 +279,9 @@ export const {
   leaveTypeSuccess,
   leaveTypeFailure,
 
-  taskLocationRequest,
-  taskLocationSuccess,
-  taskLocationFailure,
-
-  startTaskRequest,
-  startTaskSuccess,
-  startTaskFailure,
-
-  endTaskRequest,
-  endTaskSuccess,
-  endTaskFailure,
-
   attendenceReportRequest,
   attendenceReportSuccess,
   attendenceReportFailure,
-
-  taskDoItLaterRequest,
-  taskDoItLaterSuccess,
-  taskDoItLaterFailure,
 
   holidayListRequest,
   holidayListSuccess,
