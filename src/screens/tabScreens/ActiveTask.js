@@ -94,7 +94,7 @@ const FILTER_LABELS = {
   ...Object.fromEntries(STATUS_ORDER.map(k => [k, STATUS_CONFIG[k].label])),
 };
 
-// ─── Status Bottom Sheet ──────────────────────────────────────────────────────
+// ─── New Status Bottom Sheet ──────────────────────────────────────────────────────
 
 const StatusSheet = ({ visible, task, onSelect, onClose }) => {
   const slideAnim = useRef(new Animated.Value(400)).current;
