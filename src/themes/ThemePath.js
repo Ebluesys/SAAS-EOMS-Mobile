@@ -56,30 +56,105 @@ export const Images = {
   greenbg: require('../assets/images/greenbg.jpg'),
 };
 
-export const Colors = {
+const lightColors = {
   white: '#FFFFFF',
   fontWhite: '#FFFAEC',
-  black: '#000000',
+  black: '#0F172A',
   red: '#E94343',
   orange: '#06485bff',
   green: '#89C438',
   lightYellow: '#FFFFC5',
   skyblue: '#06485bff',
-  inputGreyBorder: '#EFEFEF',
+  inputGreyBorder: '#DDE4EE',
   textInputColor: '#1B1831',
   darkblue: '#1B1831',
-  tintGrey: '#A5A5A5',
-  greytext: '#B4B3BB',
-  greytext2: '#504F4F',
-  lightgreybg: '#B4B3BB',
+  tintGrey: '#8B97A8',
+  greytext: '#64748B',
+  greytext2: '#4B5563',
+  lightgreybg: '#E5E7EB',
   lightgreybg2: 'rgb(249,249,249)',
-  lightgreen: '#bdffc3',
-  lightred: '#ffc0bd',
+  lightgreen: '#DCFCE7',
+  lightred: '#FEE2E2',
   backgroundWhite: 'rgb(244,244,244)',
-  lightBlue: '#87CEEB',
+  lightBlue: '#D7EBF7',
   grey: '#7D7C8A',
-  bgColor: '#34495e',
+  bgColor: '#FFFFFF',
+  button: '#06485bff',
+  primary: '#06485bff',
+  lightGrey: '#E5E7EB',
+  lightGray: '#E5E7EB',
+  gray: '#64748B',
+  blue: '#2196F3',
+  surface: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
+  page: '#F4F7FB',
+  text: '#0F172A',
+  mutedText: '#64748B',
+  border: '#E2E8F0',
+  card: '#FFFFFF',
 };
+
+const darkColors = {
+  white: '#0B1120',
+  fontWhite: '#F8FAFC',
+  black: '#F8FAFC',
+  red: '#FB7185',
+  orange: '#2DD4BF',
+  green: '#4ADE80',
+  lightYellow: '#3A2F00',
+  skyblue: '#38BDF8',
+  inputGreyBorder: '#334155',
+  textInputColor: '#E2E8F0',
+  darkblue: '#F8FAFC',
+  tintGrey: '#94A3B8',
+  greytext: '#94A3B8',
+  greytext2: '#CBD5E1',
+  lightgreybg: '#334155',
+  lightgreybg2: '#111827',
+  lightgreen: '#14381E',
+  lightred: '#3B1720',
+  backgroundWhite: '#0F172A',
+  lightBlue: '#1E3A5F',
+  grey: '#94A3B8',
+  bgColor: '#0F172A',
+  button: '#38BDF8',
+  primary: '#38BDF8',
+  lightGrey: '#334155',
+  lightGray: '#334155',
+  gray: '#94A3B8',
+  blue: '#60A5FA',
+  surface: '#111827',
+  surfaceElevated: '#172033',
+  page: '#0B1120',
+  text: '#F8FAFC',
+  mutedText: '#94A3B8',
+  border: '#334155',
+  card: '#111827',
+};
+
+const activeColors = { ...lightColors };
+
+export const themeModes = {
+  light: 'light',
+  dark: 'dark',
+};
+
+export const applyTheme = mode => {
+  const nextColors = mode === themeModes.dark ? darkColors : lightColors;
+
+  Object.keys(activeColors).forEach(key => {
+    delete activeColors[key];
+  });
+  Object.assign(activeColors, nextColors);
+
+  return activeColors;
+};
+
+export const getThemeColors = mode => {
+  return mode === themeModes.dark ? darkColors : lightColors;
+};
+
+export const Colors = activeColors;
 
 export const Fonts = {
   MulishBold: 'Mulish-Bold',

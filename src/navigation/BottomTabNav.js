@@ -1,11 +1,9 @@
 import React from 'react';
 import {
-  Text,
   Image,
   View,
   StyleSheet,
-  Platform,
-  TouchableOpacity,
+  Pressable,
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Home from '../screens/tabScreens/Home';
@@ -15,14 +13,37 @@ import normalize from '../utils/helpers/normalize';
 import ActiveTask from '../screens/tabScreens/ActiveTask';
 import Leave from '../screens/tabScreens/Leave';
 import AttendenceReport from '../screens/tabScreens/AttendenceReport';
-import Svg, { Path } from 'react-native-svg';
+import { useAppTheme } from '../themes/ThemeContext';
 
 const Tab = createBottomTabNavigator();
 
-const TabIcon = ({ focused, source }) => (
-  <View style={[styles.tabIconContainer, focused && styles.focusedTabIcon]}>
+const TabButton = ({ children, onPress, onLongPress, accessibilityState, routeName }) => {
+  const focused = accessibilityState?.selected;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.tabButtonWrap,
+        focused && styles.tabButtonFocused,
+        pressed && styles.tabButtonPressed,
+        routeName === 'Home' && styles.centerButtonLift,
+        routeName === 'Home' && styles.centerButton,
+        routeName === 'Home' && focused && styles.centerButtonFocused,
+        routeName === 'Home' && pressed && styles.centerButtonPressed,
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+};
+
+const TabIcon = ({ focused, source, isCenterTab }) => (
+  <View style={[styles.iconShell, isCenterTab && styles.centerIconShell, focused && styles.iconShellFocused]}>
     <Image
-      style={[styles.tabIcon, focused && styles.focusedIcon]}
+      style={[styles.tabIcon, isCenterTab && styles.centerIcon, focused && styles.focusedIcon]}
       source={source}
       resizeMode="contain"
     />
@@ -30,6 +51,8 @@ const TabIcon = ({ focused, source }) => (
 );
 
 const BottomTabNav = () => {
+  const { colors } = useAppTheme();
+
   return (
     <Tab.Navigator
       initialRouteName="Home"
@@ -38,33 +61,21 @@ const BottomTabNav = () => {
         tabBarHideOnKeyboard: true,
         tabBarShowLabel: false,
         headerShown: false,
-        tabBarStyle: styles.tabBarStyle,
-        tabBarBackground: () => (
-          <View style={styles.tabBarBackground}>
-            <Svg
-              width="100%"
-              height="100%"
-              style={styles.svgCurve}
-              viewBox="0 0 400 85"
-              preserveAspectRatio="none"
-            >
-              <Path
-                d="M0,20 Q0,0 20,0 L130,0 Q150,0 160,18 C170,28 180,35 200,35 C220,35 230,28 240,18 Q250,0 270,0 L380,0 Q400,0 400,20 L400,85 L0,85 Z"
-                fill={Colors.skyblue}
-              />
-            </Svg>
-          </View>
-        ),
+        tabBarStyle: [
+          styles.tabBarStyle,
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border,
+          },
+        ],
       }}
     >
       <Tab.Screen
         name="AttendenceReport"
         component={AttendenceReport}
-        listeners={({ navigation }) => ({
-          blur: () => navigation.setParams({ screen: undefined }),
-        })}
         options={{
           unmountOnBlur: true,
+          tabBarButton: props => <TabButton {...props} routeName="AttendenceReport" />,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} source={Images.tab6} />
           ),
@@ -75,6 +86,7 @@ const BottomTabNav = () => {
         component={Leave}
         options={{
           unmountOnBlur: true,
+          tabBarButton: props => <TabButton {...props} routeName="Leave" />,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} source={Images.tab2} />
           ),
@@ -85,22 +97,9 @@ const BottomTabNav = () => {
         component={Home}
         options={{
           unmountOnBlur: true,
+          tabBarButton: props => <TabButton {...props} routeName="Home" />,
           tabBarIcon: ({ focused }) => (
-            <View style={styles.floatingButtonWrapper}>
-              <View style={styles.floatingButton}>
-                <View style={styles.floatingButtonInner}>
-                  <Image
-                    style={{
-                      height: normalize(30),
-                      width: normalize(30),
-                      tintColor:focused ? Colors.red :Colors.white,
-                    }}
-                    source={Images.tab1}
-                    resizeMode="cover"
-                  />
-                </View>
-              </View>
-            </View>
+            <TabIcon focused={focused} source={Images.tab1} isCenterTab />
           ),
         }}
       />
@@ -110,6 +109,7 @@ const BottomTabNav = () => {
         component={ActiveTask}
         options={{
           unmountOnBlur: true,
+          tabBarButton: props => <TabButton {...props} routeName="ActiveTask" />,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} source={Images.tab3} />
           ),
@@ -119,11 +119,9 @@ const BottomTabNav = () => {
       <Tab.Screen
         name="MyProfile"
         component={MyProfile}
-        listeners={({ navigation }) => ({
-          blur: () => navigation.setParams({ screen: undefined }),
-        })}
         options={{
           unmountOnBlur: true,
+          tabBarButton: props => <TabButton {...props} routeName="MyProfile" />,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} source={Images.tab4} />
           ),
@@ -138,90 +136,104 @@ export default BottomTabNav;
 const styles = StyleSheet.create({
   tabBarStyle: {
     borderTopWidth: 0,
-    borderTopColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-    borderTopRightRadius: normalize(20),
-    borderTopLeftRadius: normalize(20),
-    height: normalize(85),
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: normalize(28),
+    height: normalize(78),
     position: 'absolute',
-    left: 0,
-    bottom: 0,
-    right: 0,
-    shadowColor: Colors.black,
+    left: normalize(12),
+    right: normalize(12),
+    bottom: normalize(10),
+    paddingHorizontal: normalize(10),
+    paddingTop: normalize(10),
+    paddingBottom: normalize(10),
+    shadowColor: '#0F1B2D',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 14,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 5,
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(6,72,91,0.06)',
   },
-  tabBarBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
-    borderTopRightRadius: normalize(20),
-    borderTopLeftRadius: normalize(20),
-  },
-  svgCurve: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  tabIconContainer: {
+  iconShell: {
+    width: normalize(42),
+    height: normalize(42),
+    borderRadius: normalize(14),
+    backgroundColor: 'rgba(6,72,91,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
-    top: Platform.OS === 'ios' ? normalize(5) : normalize(10),
-    paddingVertical: normalize(15),
-    paddingHorizontal: normalize(15),
-    borderRadius: normalize(50),
+    borderWidth: 1,
+    borderColor: 'rgba(6,72,91,0.04)',
   },
-  focusedTabIcon: {
-    backgroundColor: 'rgb(239, 250, 254)',
+  iconShellFocused: {
+    backgroundColor: Colors.skyblue,
+    borderColor: Colors.skyblue,
+    shadowColor: Colors.skyblue,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
   tabIcon: {
     height: normalize(20),
     width: normalize(20),
-    tintColor: Colors.white,
+    tintColor: '#748094',
   },
   focusedIcon: {
-    tintColor: Colors.red,
+    tintColor: Colors.white,
   },
-  floatingButtonWrapper: {
-    top: normalize(-25),
-    justifyContent: 'center',
+  centerIconShell: {
+    width: normalize(54),
+    height: normalize(54),
+    borderRadius: normalize(18),
+    backgroundColor: 'rgba(6,72,91,0.08)',
+  },
+  centerIcon: {
+    height: normalize(24),
+    width: normalize(24),
+  },
+  tabButtonWrap: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  floatingButton: {
-    width: normalize(70),
-    height: normalize(70),
-    borderRadius: normalize(35),
+  tabButtonFocused: {
+    transform: [{ translateY: -4 }],
+  },
+  tabButtonPressed: {
+    transform: [{ translateY: -10 }, { scale: 0.96 }],
+  },
+  centerButtonLift: {
+    top: normalize(-10),
+  },
+  centerButton: {
+    width: normalize(62),
+    height: normalize(62),
+    borderRadius: normalize(20),
+    backgroundColor: 'rgba(6,72,91,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(6,72,91,0.08)',
+    shadowColor: '#0F1B2D',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  centerButtonFocused: {
+    backgroundColor: 'rgba(6,72,91,0.12)',
+    borderColor: 'rgba(6,72,91,0.1)',
+  },
+  centerButtonPressed: {
+    transform: [{ translateY: -4 }, { scale: 0.94 }],
+  },
+  centerButtonInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: normalize(18),
     backgroundColor: Colors.skyblue,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.white,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    borderWidth: normalize(2),
-    borderColor: Colors.white,
-  },
-  floatingButtonInner: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: normalize(35),
   },
 });

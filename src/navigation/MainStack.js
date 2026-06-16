@@ -1,20 +1,36 @@
-import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useMemo } from 'react';
+import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import Toast from 'react-native-toast-message';
 
-import { Alert } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import Splash from '../screens/splash/Splash';
 import BottomTabNav from './BottomTabNav';
 import Signin from '../screens/authScreens/Signin';
 import Attendence from '../screens/tabScreens/Attendance';
+import { useAppTheme } from '../themes/ThemeContext';
 const Stack = createStackNavigator();
 export default function StackNav() {
   const AuthReducer = useSelector(state => state.AuthReducer);
+  const { isDarkMode, colors } = useAppTheme();
 
-  const dispatch = useDispatch();
+  const navigationTheme = useMemo(() => {
+    const baseTheme = isDarkMode ? DarkTheme : DefaultTheme;
+
+    return {
+      ...baseTheme,
+      colors: {
+        ...baseTheme.colors,
+        background: colors.page,
+        card: colors.surface,
+        text: colors.text,
+        border: colors.border,
+        primary: colors.skyblue,
+        notification: colors.red,
+      },
+    };
+  }, [colors, isDarkMode]);
 
   const authScreens = {
     Signin: Signin,
@@ -27,7 +43,7 @@ export default function StackNav() {
     return <Splash />;
   } else {
     return (
-      <NavigationContainer>
+      <NavigationContainer theme={navigationTheme}>
         {AuthReducer.getTokenResponse === null ? (
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             {Object.entries({

@@ -11,10 +11,12 @@ import {
 import PropTypes from 'prop-types';
 import {Colors, Fonts} from '../themes/ThemePath';
 import normalize from '../utils/helpers/normalize';
+import {useAppTheme} from '../themes/ThemeContext';
 export default function TextInputWithButton(props) {
   const inputRef = useRef(null);
   const [blurview, setblurview] = useState(false);
   const [headerTaxt, setHeaderTaxt] = useState(false);
+  const {colors} = useAppTheme();
 
   function onChangeText(text) {
     text.length > 0 ? setHeaderTaxt(true) : setHeaderTaxt(false);
@@ -48,11 +50,11 @@ export default function TextInputWithButton(props) {
         onPress={() => onPress()}
         activeOpacity={props.activeOpacity}
         style={{
-          backgroundColor: props.backgroundColor,
+            backgroundColor: props.backgroundColor || colors.surface,
           borderRadius: props.borderRadius,
           alignItems: 'flex-start',
           justifyContent: 'center',
-          borderColor: Colors.lightBlue,
+            borderColor: props.borderColor || colors.border,
           borderWidth: normalize(1),
           marginTop: props.marginTop,
           width: props.inputWidth,
@@ -76,7 +78,7 @@ export default function TextInputWithButton(props) {
             {headerTaxt && (
               <Text
                 style={{
-                  color: Colors.skyblue,
+                  color: colors.skyblue,
                   fontSize: normalize(10),
                   fontFamily: Fonts.MulishRegular,
                   marginTop: normalize(10),
@@ -97,7 +99,7 @@ export default function TextInputWithButton(props) {
                   paddingLeft: props.textInputLeft,
                   textAlign: props.textAlign,
                   letterSpacing: props.letterSpacing,
-                  color: props.textColor,
+                  color: props.textColor || colors.text,
                   marginLeft: normalize(5),
                   fontFamily: Fonts.MulishRegular,
                   fontSize: props.fontSize,
@@ -119,7 +121,7 @@ export default function TextInputWithButton(props) {
               placeholder={props.placeholder}
               editable={props.editable}
               spellCheck={false}
-              placeholderTextColor={Colors.tintGrey}
+              placeholderTextColor={props.placeholderTextColor || colors.mutedText}
               textAlignVertical="top"
               keyboardType={props.keyboardType}
               value={props.value}
@@ -239,7 +241,7 @@ TextInputWithButton.defaultProps = {
   onChangeText: null,
   color: Colors.black,
   editable: true,
-  borderColor: '#DDDDDD',
+  borderColor: Colors.inputGreyBorder,
   onFocus: null,
   onBlur: null,
   letterSpacing: 0,

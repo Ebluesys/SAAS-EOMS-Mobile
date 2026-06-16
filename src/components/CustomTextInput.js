@@ -6,9 +6,11 @@ import PropTypes from 'prop-types';
 import {useState} from 'react';
 import normalize from '../utils/helpers/normalize';
 import {Colors} from '../themes/ThemePath';
+import {useAppTheme} from '../themes/ThemeContext';
 
 export default function CustomTextInput(props) {
   const [visible, setVisible] = useState(props.isSecure);
+  const {colors} = useAppTheme();
   function onChangeText(text) {
     if (props.onChangeText) {
       props.onChangeText(text);
@@ -53,7 +55,7 @@ export default function CustomTextInput(props) {
         marginTop: props.marginTop,
         marginBottom: props.marginBottom,
         // position: 'relative',
-        backgroundColor: props.backgroundColor,
+        backgroundColor: props.backgroundColor || colors.surface,
         flexDirection: 'row',
         justifyContent: 'flex-start',
         marginStart: props.marginStart,
@@ -95,7 +97,7 @@ export default function CustomTextInput(props) {
             // textAlign: props.textAlign,
             // marginLeft: props.marginLeft,
             letterSpacing: normalize(props.letterSpacing),
-            color: props.color,
+            color: props.color || colors.text,
             fontFamily: props.fontFamily,
             fontSize: normalize(props.fontSize),
             justifyContent: 'center',
@@ -117,7 +119,7 @@ export default function CustomTextInput(props) {
           autoCapitalize={props.autoCapitalize}
           placeholder={props.placeholder}
           editable={props.editable}
-          placeholderTextColor={props.placeholderTextColor}
+          placeholderTextColor={props.placeholderTextColor || colors.mutedText}
           keyboardType={props.keyboardType}
           value={props.value}
           fontWeight={props.fontWeight}
@@ -148,7 +150,7 @@ export default function CustomTextInput(props) {
               alignSelf: 'center',
               justifyContent: 'center',
               overflow: 'visible',
-              tintColor: '#AEAEB2',
+              tintColor: colors.mutedText,
             }}
             resizeMode="contain"
           />
@@ -254,7 +256,7 @@ CustomTextInput.defaultProps = {
   onChangeText: null,
   color: Colors.black,
   editable: true,
-  borderColor: '#DDDDDD',
+  borderColor: Colors.inputGreyBorder,
   onFocus: null,
   onBlur: null,
   letterSpacing: 0,

@@ -1,7 +1,5 @@
 import {
-  Dimensions,
   Image,
-  ImageBackground,
   Keyboard,
   KeyboardAvoidingView,
   PermissionsAndroid,
@@ -27,12 +25,13 @@ import constants from '../../utils/helpers/constants';
 import UpdateModal from '../../components/UpdateModal';
 import { Camera } from 'react-native-vision-camera';
 import { useIsFocused } from '@react-navigation/native';
-const windowHeight = Dimensions.get('window').height;
+import { useAppTheme } from '../../themes/ThemeContext';
 let status = '';
 const Signin = props => {
   const dispatch = useDispatch();
   const isFocused = useIsFocused();
   const AuthReducer = useSelector(state => state.AuthReducer);
+  const { colors } = useAppTheme();
 
 
   const [phone, setPhone] = useState('9876543210'); 
@@ -124,11 +123,9 @@ const Signin = props => {
     }
   }
   return (
-    <ImageBackground
-      source={Images.pageBackground}
-      resizeMode="cover"
-      style={styles.onbordingStyle}
-    >
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.page }] }>
+      <View style={styles.backgroundAccentTop} />
+      <View style={styles.backgroundAccentBottom} />
       <Loader visible={AuthReducer?.status == 'Auth/signInRequest'} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -136,54 +133,43 @@ const Signin = props => {
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
-       
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             flexGrow: 1,
-            padding: 15,
-            paddingBottom: isKeyboardVisible ? normalize(200) : normalize(20),
+            paddingHorizontal: normalize(20),
+            paddingTop: normalize(12),
+            paddingBottom: isKeyboardVisible ? normalize(120) : normalize(28),
           }}
         >
-          <View style={{ width: '100%', paddingHorizontal: normalize(10) }}>
-            <View style={styles.headerContain}>
+          <View style={styles.heroSection}>
+            <View style={styles.logoBadge}>
               <Image
                 resizeMode="contain"
-                style={{
-                  alignSelf: 'center',
-                  height: normalize(100),
-                  width: normalize(200),
-                  marginTop: -30,
-                }}
+                style={styles.logo}
                 source={Images.app_logo}
               />
-
-              <Text
-                style={[
-                  styles.headerText2,
-                  { fontSize: 20, fontWeight: 'bold' },
-                ]}
-              >
-                With TECH We MAKE
-              </Text>
-              <Text style={styles.headerText2}>
-               “Please log in to continue”
-              </Text>
-             
             </View>
+
+            <Text style={[styles.heroTitle, { color: colors.text }]}>Welcome back</Text>
+            <Text style={[styles.heroSubtitle, { color: colors.mutedText }] }>
+              Sign in to continue to your dashboard and manage your account.
+            </Text>
           </View>
 
           <View
-            style={{
-              width: '100%',
-              height: 450,
-              alignSelf: 'center',
-              backgroundColor: Colors.white,
-              borderRadius: normalize(10),
-              alignItems: 'center',
-              padding: 15,
-              marginTop: 15,
-            }}
+            style={[
+              styles.formCard,
+              {
+                backgroundColor: colors.surfaceElevated,
+                borderColor: colors.border,
+              },
+            ]}
           >
-            <Text style={styles.headerText1}>Login</Text>
+            <Text style={[styles.headerText1, { color: colors.text }]}>Log in</Text>
+            <Text style={[styles.formSubtitle, { color: colors.mutedText }] }>
+              Use your username and password to access the app.
+            </Text>
+
             <TextInputWithButton
               show={true}
               icon={true}
@@ -254,62 +240,106 @@ const Signin = props => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ImageBackground>
+    </SafeAreaView>
   );
 };
 
 export default Signin;
 
 const styles = StyleSheet.create({
-  onbordingStyle: {
+  screen: {
     flex: 1,
+    backgroundColor: '#F4F7FB',
   },
-
-  headerContain: {
-    alignSelf: 'flex-start',
-    marginTop: normalize(80),
-
+  backgroundAccentTop: {
+    position: 'absolute',
+    top: -normalize(80),
+    right: -normalize(70),
+    width: normalize(220),
+    height: normalize(220),
+    borderRadius: normalize(110),
+    backgroundColor: '#DDEBFF',
+    opacity: 0.65,
+  },
+  backgroundAccentBottom: {
+    position: 'absolute',
+    left: -normalize(100),
+    bottom: normalize(90),
+    width: normalize(260),
+    height: normalize(260),
+    borderRadius: normalize(130),
+    backgroundColor: '#EAF8F3',
+    opacity: 0.9,
+  },
+  heroSection: {
+    alignItems: 'center',
+    paddingTop: normalize(18),
+    paddingBottom: normalize(24),
     width: '100%',
   },
-  underline: {
-    width: normalize(55),
-    height: normalize(3),
-    borderRadius: normalize(15),
-    backgroundColor: Colors.lightYellow,
-    marginTop: normalize(5),
+  logoBadge: {
+    width: normalize(92),
+    height: normalize(92),
+    borderRadius: normalize(28),
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: normalize(18),
+    shadowColor: '#102030',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  logo: {
+    width: normalize(62),
+    height: normalize(62),
+  },
+  heroTitle: {
+    fontSize: normalize(28),
+    fontWeight: '800',
+    color: Colors.darkblue,
+    textAlign: 'center',
+    letterSpacing: -0.4,
+  },
+  heroSubtitle: {
+    marginTop: normalize(8),
+    fontFamily: Fonts.MulishRegular,
+    fontSize: normalize(13),
+    lineHeight: normalize(20),
+    color: '#5E6A7D',
+    textAlign: 'center',
+    maxWidth: '88%',
+  },
+  formCard: {
+    width: '100%',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: normalize(24),
+    paddingHorizontal: normalize(18),
+    paddingTop: normalize(22),
+    paddingBottom: normalize(20),
+    shadowColor: '#102030',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16,32,48,0.05)',
   },
   headerText1: {
-    // fontFamily: Fonts.MulishRegular,
-    fontSize: normalize(22),
-    marginTop: normalize(15),
+    fontSize: normalize(24),
     color: Colors.darkblue,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'center',
   },
-  headerText2: {
+  formSubtitle: {
+    marginTop: normalize(6),
+    marginBottom: normalize(8),
     fontFamily: Fonts.MulishSemiBold,
     fontSize: normalize(12),
-    color: Colors.darkblue,
-
+    lineHeight: normalize(18),
+    color: '#687385',
     textAlign: 'center',
-  },
-  text1: {
-    fontSize: normalize(12),
-    color: '#B4B3BB',
-    fontFamily: Fonts.MulishRegular,
-  },
-  fontregular: {
-    fontSize: normalize(12),
-    color: Colors.textInputColor,
-    fontFamily: Fonts.MulishRegular,
-  },
-  contentWrapper: {
-    // // height: normalize(370),
-    // // position: 'absolute',
-    // backgroundColor: Colors.white,
-    // borderRadius: normalize(10),
-    // width: '100%',
-    // bottom: normalize(20),
-    // padding: normalize(15)
   },
 });

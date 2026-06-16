@@ -8,12 +8,16 @@ import {
   useCustomAlert,
 } from './src/utils/helpers/CustomAlertContext';
 import { setAlertInstance } from './src/utils/helpers/ShowMessage';
+import { ThemeProvider, useAppTheme } from './src/themes/ThemeContext';
 
-const App = () => {
+const AppContent = () => {
   const dispatch = useDispatch();
+  const { isDarkMode, colors } = useAppTheme();
+
   useEffect(() => {
     dispatch(getTokenRequest());
-  }, []);
+  }, [dispatch]);
+
   const InitAlert = () => {
     const alert = useCustomAlert();
 
@@ -23,13 +27,25 @@ const App = () => {
 
     return null;
   };
+
   return (
     <CustomAlertProvider>
       <InitAlert />
-      <StatusBar animated={true} backgroundColor="black" />
-
+      <StatusBar
+        animated={true}
+        backgroundColor={colors.page}
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+      />
       <MainStack />
     </CustomAlertProvider>
+  );
+};
+
+const App = () => {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 };
 

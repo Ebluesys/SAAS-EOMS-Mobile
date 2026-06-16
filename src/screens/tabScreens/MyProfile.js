@@ -8,8 +8,9 @@ import {
   ScrollView,
   Platform,
   Modal,
+  Switch,
+  StatusBar,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import Header from '../../components/Header';
 import { Colors, Fonts, Images } from '../../themes/ThemePath';
 import normalize from '../../utils/helpers/normalize';
@@ -25,36 +26,51 @@ import {
 import connectionrequest from '../../utils/helpers/NetInfo';
 import Loader from '../../utils/helpers/Loader';
 import TextInputWithButton from '../../components/TextInputWithBotton';
+import { useAppTheme } from '../../themes/ThemeContext';
 
 let status = '';
+
+// ── Minimal inline icon components (no extra deps) ───────────────────────────
+const Icon = ({ name, size = 18, color = '#fff' }) => {
+  const icons = {
+    user: '👤',
+    mail: '✉️',
+    phone: '📞',
+    gender: '⚧',
+    building: '🏢',
+    badge: '🪪',
+    edit: '✏️',
+    lock: '🔒',
+    logout: '🚪',
+    sun: '☀️',
+    moon: '🌙',
+    camera: '📷',
+    check: '✓',
+    close: '✕',
+  };
+  return (
+    <Text style={{ fontSize: size, lineHeight: size + 4 }}>{icons[name] || '•'}</Text>
+  );
+};
 
 const MyProfile = props => {
   const dispatch = useDispatch();
   const ProfileReducer = useSelector(state => state.ProfileReducer);
   const isFocused = useIsFocused();
+  const { isDarkMode, toggleTheme, colors } = useAppTheme();
 
   const userDetails = ProfileReducer?.userDetailsResponse || {};
 
-  // ─── onUpdateProfile params: first_name, last_name, email, profile_pic ───
   const [firstName, setFirstName] = useState(userDetails?.first_name || '');
   const [lastName, setLastName] = useState(userDetails?.last_name || '');
   const [email, setEmail] = useState(userDetails?.email || '');
   const [capturedImageWithGeotag, setCapturedImageWithGeotag] = useState(
     userDetails?.profile_pic_url || null,
   );
-
-  // ─── Read-only display fields (not sent in update) ───────────────────────
-  const [phone, setPhone] = useState(userDetails?.phone || '');
-  const [dob, setDob] = useState(userDetails?.dob || '');
-  const [dobDate, setDobDate] = useState(
-    userDetails?.dob ? new Date(userDetails?.dob) : new Date(),
-  );
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [address, setAddress] = useState(userDetails?.address || '');
-  const [municipality, setMunicipality] = useState(userDetails?.municipality || '');
-  const [ward, setWard] = useState(userDetails?.ward || '');
-  const [district, setDistrict] = useState(userDetails?.district || '');
-  const [designation, setDesignation] = useState(userDetails?.designation || '');
+  const [phone] = useState(userDetails?.phone || '');
+  const [gender] = useState(userDetails?.gender || '');
+  const [employeeCode] = useState(userDetails?.employee_code || '');
+  const [workLocation] = useState(userDetails?.work_location || '');
 
   const [isEditing, setIsEditing] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
@@ -62,29 +78,36 @@ const MyProfile = props => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // local copies for derived display
+  const [localFirstName, setLocalFirstName] = useState('');
+  const [localLastName, setLocalLastName] = useState('');
+  const [localEmail, setLocalEmail] = useState('');
+  const [localPhone, setLocalPhone] = useState('');
+  const [localGender, setLocalGender] = useState('');
+  const [localEmployeeCode, setLocalEmployeeCode] = useState('');
+  const [localWorkLocation, setLocalWorkLocation] = useState('');
+
   useEffect(() => {
     getuserDetails();
   }, [isFocused]);
 
-  // Sync state when userDetailsResponse changes
   useEffect(() => {
     if (ProfileReducer?.userDetailsResponse) {
       const d = ProfileReducer.userDetailsResponse;
       setFirstName(d?.first_name || '');
       setLastName(d?.last_name || '');
       setEmail(d?.email || '');
-      setPhone(d?.phone || '');
-      setDob(d?.dob || '');
-      setDobDate(d?.dob ? new Date(d?.dob) : new Date());
-      setAddress(d?.address || '');
-      setMunicipality(d?.municipality || '');
-      setWard(d?.ward || '');
-      setDistrict(d?.district || '');
-      setDesignation(d?.designation || '');
+      setLocalFirstName(d?.first_name || '');
+      setLocalLastName(d?.last_name || '');
+      setLocalEmail(d?.email || '');
+      setLocalPhone(d?.phone || '');
+      setLocalGender(d?.gender || '');
+      setLocalEmployeeCode(d?.employee_code || '');
+      setLocalWorkLocation(d?.work_location || '');
+      setCapturedImageWithGeotag(d?.profile_pic_url || null);
     }
   }, [ProfileReducer?.userDetailsResponse]);
 
-  // Receive photo captured in Attendance page
   useEffect(() => {
     if (props?.route?.params?.finalImageUri) {
       setCapturedImageWithGeotag(props.route.params.finalImageUri);
@@ -96,91 +119,54 @@ const MyProfile = props => {
 
   const handleCancel = () => {
     setIsEditing(false);
-    setShowDatePicker(false);
     const d = ProfileReducer?.userDetailsResponse || {};
     setFirstName(d?.first_name || '');
     setLastName(d?.last_name || '');
     setEmail(d?.email || '');
-    setPhone(d?.phone || '');
-    setDob(d?.dob || '');
-    setDobDate(d?.dob ? new Date(d?.dob) : new Date());
-    setAddress(d?.address || '');
-    setMunicipality(d?.municipality || '');
-    setWard(d?.ward || '');
-    setDistrict(d?.district || '');
-    setDesignation(d?.designation || '');
-    setCapturedImageWithGeotag(d?.photo || null);
+    setCapturedImageWithGeotag(d?.profile_pic_url || null);
   };
 
   const handleClickPhoto = () => {
     props?.navigation.navigate('Attendence', { pagename: 'MyProfile' });
   };
 
-  const handleDateChange = (event, selectedDate) => {
-    const currentDate = selectedDate || dobDate;
-    setShowDatePicker(Platform.OS === 'ios');
-    setDobDate(currentDate);
-    setDob(currentDate.toISOString().split('T')[0]);
-  };
-
-  // ─── onUpdateProfile: sends first_name, last_name, email, profile_pic ────
   function onUpdateProfile() {
-    if (!firstName.trim()) {
-      showErrorAlert('First name is required');
-      return;
-    }
-    if (!lastName.trim()) {
-      showErrorAlert('Last name is required');
-      return;
-    }
-    if (!email.trim()) {
-      showErrorAlert('Email is required');
-      return;
-    }
+    if (!firstName.trim()) { showErrorAlert('First name is required'); return; }
+    if (!lastName.trim()) { showErrorAlert('Last name is required'); return; }
+    if (!email.trim()) { showErrorAlert('Email is required'); return; }
 
     const formData = new FormData();
     formData.append('first_name', firstName);
     formData.append('last_name', lastName);
     formData.append('email', email);
 
-    if (capturedImageWithGeotag) {
+    if (capturedImageWithGeotag && !capturedImageWithGeotag.startsWith('http')) {
       const imageName = capturedImageWithGeotag.split('/').pop();
       formData.append('profile_pic', {
-        uri:
-          Platform.OS === 'android'
-            ? capturedImageWithGeotag
-            : capturedImageWithGeotag.replace('file://', ''),
+        uri: Platform.OS === 'android'
+          ? capturedImageWithGeotag
+          : capturedImageWithGeotag.replace('file://', ''),
         name: imageName,
         type: 'image/jpeg',
       });
     }
 
     connectionrequest()
-      .then(() => {
-        dispatch(profileUpdateRequest(formData));
-      })
-      .catch(() => {
-        showErrorAlert('Please connect to internet');
-      });
+      .then(() => dispatch(profileUpdateRequest(formData)))
+      .catch(() => showErrorAlert('Please connect to internet'));
   }
 
   function getuserDetails() {
     connectionrequest()
-      .then(() => {
-        dispatch(userDetailsRequest());
-      })
-      .catch(() => {
-        showErrorAlert('Please connect to internet');
-      });
+      .then(() => dispatch(userDetailsRequest()))
+      .catch(() => showErrorAlert('Please connect to internet'));
   }
 
-  // ─── Reset Password ───────────────────────────────────────────────────────
   const openResetPasswordModal = () => {
     setShowResetPasswordModal(true);
     setPassword('');
     setConfirmPassword('');
   };
-
   const closeResetPasswordModal = () => {
     setShowResetPasswordModal(false);
     setPassword('');
@@ -188,66 +174,49 @@ const MyProfile = props => {
   };
 
   const handleResetPassword = () => {
-    if (password !== confirmPassword) {
-      showErrorAlert('Confirm password does not match');
-      return;
-    }
-    if (password.length < 6) {
-      showErrorAlert('Password must be at least 6 characters long');
-      return;
-    }
+    if (password.length < 6) { showErrorAlert('Password must be at least 6 characters'); return; }
+    if (password !== confirmPassword) { showErrorAlert('Passwords do not match'); return; }
     const obj = {
       id: ProfileReducer?.userDetailsResponse?.id,
       new_password: password,
       confirm_password: confirmPassword,
     };
     connectionrequest()
-      .then(() => {
-        dispatch(resetPasswordRequest(obj));
-        closeResetPasswordModal();
-      })
-      .catch(() => {
-        showErrorAlert('Please connect to internet');
-      });
+      .then(() => { dispatch(resetPasswordRequest(obj)); closeResetPasswordModal(); })
+      .catch(() => showErrorAlert('Please connect to internet'));
   };
 
-  // ─── Redux status handler ─────────────────────────────────────────────────
   if (status === '' || ProfileReducer.status !== status) {
     switch (ProfileReducer.status) {
       case 'Profile/userDetailsRequest':
-        status = ProfileReducer.status;
-        setLoading(true);
-        break;
+        status = ProfileReducer.status; setLoading(true); break;
       case 'Profile/userDetailsSuccess':
-        status = ProfileReducer.status;
-        setLoading(false);
-        break;
+        status = ProfileReducer.status; setLoading(false); break;
       case 'Profile/userDetailsFailure':
-        status = ProfileReducer.status;
-        setLoading(false);
-        break;
+        status = ProfileReducer.status; setLoading(false); break;
       case 'Profile/profileUpdateRequest':
-        status = ProfileReducer.status;
-        setLoading(true);
-        break;
+        status = ProfileReducer.status; setLoading(true); break;
       case 'Profile/profileUpdateSuccess':
-        status = ProfileReducer.status;
-        setLoading(false);
-        setIsEditing(false);
-        getuserDetails();
-        break;
+        status = ProfileReducer.status; setLoading(false); setIsEditing(false); getuserDetails(); break;
       case 'Profile/profileUpdateFailure':
-        status = ProfileReducer.status;
-        setLoading(false);
-        setIsEditing(false);
-        break;
+        status = ProfileReducer.status; setLoading(false); setIsEditing(false); break;
     }
   }
 
-  const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'User Name';
+  const fullName = [localFirstName || firstName, localLastName || lastName].filter(Boolean).join(' ') || 'User Name';
+  const initials = [localFirstName || firstName, localLastName || lastName]
+    .filter(Boolean).map(n => n[0]).join('').toUpperCase() || 'U';
+
+  const BG = isDarkMode ? '#0F172A' : '#F8FAFC';
+  const CARD = isDarkMode ? '#1E293B' : '#FFFFFF';
+  const TEXT = isDarkMode ? '#F1F5F9' : '#1E293B';
+  const MUTED = isDarkMode ? '#94A3B8' : '#64748B';
+  const BORDER = isDarkMode ? '#334155' : '#E2E8F0';
+  const ACCENT = '#6366F1'; // indigo
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: BG }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <Header
         HeaderLogo
         Title
@@ -258,261 +227,275 @@ const MyProfile = props => {
       <Loader visible={loading} />
 
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: normalize(40) }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Avatar & Name ── */}
-        <View style={styles.header}>
+        {/* ── Hero Banner ── */}
+        <View style={[styles.heroBanner, { backgroundColor: ACCENT }]}>
+          {/* Decorative circles */}
+          <View style={styles.decCircle1} />
+          <View style={styles.decCircle2} />
+
+          {/* Avatar */}
           <TouchableOpacity
             onPress={isEditing ? handleClickPhoto : null}
-            style={styles.profileImageContainer}
             disabled={!isEditing}
+            activeOpacity={0.85}
+            style={styles.avatarWrapper}
           >
             {capturedImageWithGeotag ? (
               <Image
-                resizeMode="cover"
-                style={styles.profileImage}
                 source={{ uri: capturedImageWithGeotag }}
+                style={styles.avatarImage}
+                resizeMode="cover"
               />
             ) : (
-              <Image source={Images.profilepic} style={styles.profileImage} />
-            )}
-            {isEditing && (
-              <View style={styles.editImageOverlay}>
-                <Text style={styles.editImageText}>Tap to change</Text>
+              <View style={[styles.avatarPlaceholder, { backgroundColor: '#818CF8' }]}>
+                <Text style={styles.avatarInitials}>{initials}</Text>
               </View>
             )}
+            {isEditing && (
+              <View style={styles.cameraOverlay}>
+                <Icon name="camera" size={20} color="#fff" />
+              </View>
+            )}
+            {/* Status dot */}
+            <View style={styles.statusDot} />
           </TouchableOpacity>
-          <Text style={styles.headerName}>{fullName}</Text>
+
+          <Text style={styles.heroName}>{fullName}</Text>
+          <View style={styles.badgeRow}>
+            {localEmployeeCode ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{localEmployeeCode}</Text>
+              </View>
+            ) : null}
+            {localGender ? (
+              <View style={[styles.badge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                <Text style={styles.badgeText}>{localGender.charAt(0).toUpperCase() + localGender.slice(1)}</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
 
-        {/* ── Edit / View Fields ── */}
-        {isEditing ? (
-          <View style={styles.content}>
-            {/* Fields that map to onUpdateProfile params */}
-            <View style={styles.sectionLabel}>
-              <Text style={styles.sectionLabelText}>Editable Fields</Text>
+        {/* ── Theme Toggle Card ── */}
+        {!isEditing && <View style={[styles.card, { backgroundColor: CARD, borderColor: BORDER, marginTop: normalize(16) }]}>
+          <View style={styles.cardRow}>
+            <View style={styles.iconBox}>
+              <Text style={{ fontSize: 18 }}>{isDarkMode ? '🌙' : '☀️'}</Text>
             </View>
+            <View style={{ flex: 1, marginLeft: normalize(12) }}>
+              <Text style={[styles.cardRowTitle, { color: TEXT }]}>
+                {isDarkMode ? 'Dark Mode' : 'Light Mode'}
+              </Text>
+              <Text style={[styles.cardRowSub, { color: MUTED }]}>Tap to switch appearance</Text>
+            </View>
+            <Switch
+              value={isDarkMode}
+              onValueChange={toggleTheme}
+              trackColor={{ false: '#CBD5E1', true: '#818CF8' }}
+              thumbColor={isDarkMode ? ACCENT : '#fff'}
+            />
+          </View>
+        </View>}
+
+        {/* ── Info Card / Edit Card ── */}
+        {isEditing ? (
+          <View style={[styles.card, { backgroundColor: CARD, borderColor: BORDER }]}>
+            <Text style={[styles.cardTitle, { color: TEXT }]}>Edit Profile</Text>
+            <Text style={[styles.cardSubtitle, { color: MUTED }]}>Update your name, email or photo</Text>
+
+            <View style={styles.divider} />
 
             <TextInputWithButton
-              show
-              icon
-              height={normalize(45)}
+              show icon
+              height={normalize(48)}
               inputWidth={'100%'}
-              marginTop={normalize(20)}
+              marginTop={normalize(16)}
               textColor={Colors.textInputColor}
               InputHeaderText={'First Name *'}
               placeholder={'Enter first name'}
-              placeholderTextColor={Colors.black}
-              paddingLeft={normalize(25)}
-              borderColor={Colors.inputGreyBorder}
-              borderRadius={normalize(5)}
+              placeholderTextColor={MUTED}
+              paddingLeft={normalize(16)}
+              borderColor={BORDER}
+              borderRadius={normalize(10)}
               editable
               fontFamily={Fonts.MulishRegular}
               isheadertext
               value={firstName}
               fontSize={normalize(14)}
-              headertxtsize={normalize(13)}
+              headertxtsize={normalize(12)}
               onChangeText={e => setFirstName(e)}
-              tintColor={Colors.tintGrey}
+              tintColor={ACCENT}
             />
-
             <TextInputWithButton
-              show
-              icon
-              height={normalize(45)}
+              show icon
+              height={normalize(48)}
               inputWidth={'100%'}
-              marginTop={normalize(20)}
+              marginTop={normalize(16)}
               textColor={Colors.textInputColor}
               InputHeaderText={'Last Name *'}
               placeholder={'Enter last name'}
-              placeholderTextColor={Colors.black}
-              paddingLeft={normalize(25)}
-              borderColor={Colors.inputGreyBorder}
-              borderRadius={normalize(5)}
+              placeholderTextColor={MUTED}
+              paddingLeft={normalize(16)}
+              borderColor={BORDER}
+              borderRadius={normalize(10)}
               editable
               fontFamily={Fonts.MulishRegular}
               isheadertext
               value={lastName}
               fontSize={normalize(14)}
-              headertxtsize={normalize(13)}
+              headertxtsize={normalize(12)}
               onChangeText={e => setLastName(e)}
-              tintColor={Colors.tintGrey}
+              tintColor={ACCENT}
             />
-
             <TextInputWithButton
-              show
-              icon
-              height={normalize(45)}
+              show icon
+              height={normalize(48)}
               inputWidth={'100%'}
-              marginTop={normalize(20)}
+              marginTop={normalize(16)}
               textColor={Colors.textInputColor}
               InputHeaderText={'Email *'}
               placeholder={'Enter email'}
-              placeholderTextColor={Colors.black}
-              paddingLeft={normalize(25)}
-              borderColor={Colors.inputGreyBorder}
-              borderRadius={normalize(5)}
+              placeholderTextColor={MUTED}
+              paddingLeft={normalize(16)}
+              borderColor={BORDER}
+              borderRadius={normalize(10)}
               editable
               fontFamily={Fonts.MulishRegular}
               isheadertext
               value={email}
               fontSize={normalize(14)}
-              headertxtsize={normalize(13)}
+              headertxtsize={normalize(12)}
               onChangeText={e => setEmail(e)}
-              tintColor={Colors.tintGrey}
+              tintColor={ACCENT}
               keyboardType="email-address"
             />
 
-            {/* Read-only info shown for reference */}
-            <View style={[styles.sectionLabel, { marginTop: normalize(25) }]}>
-              <Text style={styles.sectionLabelText}>Other Details (read-only)</Text>
-            </View>
+            <View style={[styles.divider, { marginTop: normalize(20) }]} />
 
-            <View style={styles.readOnlyField}>
-              <Text style={styles.readOnlyLabel}>Phone</Text>
-              <Text style={styles.readOnlyValue}>{phone || 'Not provided'}</Text>
-            </View>
-            <View style={styles.readOnlyField}>
-              <Text style={styles.readOnlyLabel}>Date of Birth</Text>
-              <Text style={styles.readOnlyValue}>{dob || 'Not provided'}</Text>
-            </View>
-            <View style={styles.readOnlyField}>
-              <Text style={styles.readOnlyLabel}>Designation</Text>
-              <Text style={styles.readOnlyValue}>{designation || 'Not provided'}</Text>
+            <View style={styles.editActions}>
+              <TouchableOpacity style={[styles.btnOutline, { borderColor: '#EF4444' }]} onPress={handleCancel}>
+                <Text style={[styles.btnOutlineText, { color: '#EF4444' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btnFill, { backgroundColor: ACCENT }]} onPress={onUpdateProfile}>
+                <Text style={styles.btnFillText}>Save Changes</Text>
+              </TouchableOpacity>
             </View>
           </View>
         ) : (
-          <View style={styles.content}>
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>First Name</Text>
-              <Text style={styles.fieldValue}>{firstName || 'Not provided'}</Text>
-            </View>
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Last Name</Text>
-              <Text style={styles.fieldValue}>{lastName || 'Not provided'}</Text>
-            </View>
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <Text style={styles.fieldValue}>{email || 'Not provided'}</Text>
-            </View>
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Phone</Text>
-              <Text style={styles.fieldValue}>{phone || 'Not provided'}</Text>
-            </View>
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Date of Birth</Text>
-              <Text style={styles.fieldValue}>{dob || 'Not provided'}</Text>
-            </View>
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Designation</Text>
-              <Text style={styles.fieldValue}>{designation || 'Not provided'}</Text>
-            </View>
+          <View style={[styles.card, { backgroundColor: CARD, borderColor: BORDER }]}>
+            <Text style={[styles.cardTitle, { color: TEXT }]}>Personal Information</Text>
+            <Text style={[styles.cardSubtitle, { color: MUTED }]}>Your account details</Text>
+            <View style={styles.divider} />
+
+            <InfoRow icon="user" label="First Name" value={localFirstName} TEXT={TEXT} MUTED={MUTED} ACCENT={ACCENT} />
+            <InfoRow icon="user" label="Last Name" value={localLastName} TEXT={TEXT} MUTED={MUTED} ACCENT={ACCENT} />
+            <InfoRow icon="mail" label="Email" value={localEmail} TEXT={TEXT} MUTED={MUTED} ACCENT={ACCENT} />
+            <InfoRow icon="phone" label="Phone" value={localPhone} TEXT={TEXT} MUTED={MUTED} ACCENT={ACCENT} />
+            <InfoRow icon="gender" label="Gender" value={localGender ? localGender.charAt(0).toUpperCase() + localGender.slice(1) : ''} TEXT={TEXT} MUTED={MUTED} ACCENT={ACCENT} />
+            <InfoRow icon="badge" label="Employee Code" value={localEmployeeCode} TEXT={TEXT} MUTED={MUTED} ACCENT={ACCENT} />
+            <InfoRow icon="building" label="Work Location" value={localWorkLocation} TEXT={TEXT} MUTED={MUTED} ACCENT={ACCENT} last />
           </View>
         )}
 
         {/* ── Action Buttons ── */}
-        <View style={styles.buttonContainer}>
-          {isEditing ? (
-            <View style={styles.editButtonsContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={onUpdateProfile}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-                <Text style={styles.editButtonText}>Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.editButton, { marginTop: normalize(10), backgroundColor: Colors.lightred }]}
-                onPress={openResetPasswordModal}
-              >
-                <Text style={styles.editButtonText}>Reset Password</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.editButton, { marginTop: normalize(10), backgroundColor: Colors.orange, marginBottom: 100 }]}
-                onPress={() => dispatch(logoutRequest())}
-              >
-                <Text style={styles.editButtonText}>Logout</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        {!isEditing && (
+          <View style={styles.actionsGroup}>
+            <ActionButton
+              label="Edit Profile"
+              emoji="✏️"
+              bg={ACCENT}
+              onPress={handleEdit}
+            />
+            <ActionButton
+              label="Reset Password"
+              emoji="🔒"
+              bg="#F59E0B"
+              onPress={openResetPasswordModal}
+            />
+            <ActionButton
+              label="Logout"
+              emoji="🚪"
+              bg="#EF4444"
+              onPress={() => dispatch(logoutRequest())}
+            />
+          </View>
+        )}
       </ScrollView>
 
       {/* ── Reset Password Modal ── */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent
         visible={showResetPasswordModal}
         onRequestClose={closeResetPasswordModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Reset Password</Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={closeResetPasswordModal}>
-                <Text style={styles.modalCloseText}>×</Text>
+          <View style={[styles.modalBox, { backgroundColor: CARD }]}>
+            {/* Header */}
+            <View style={[styles.modalTop, { backgroundColor: ACCENT }]}>
+              <Text style={styles.modalTopTitle}>Reset Password</Text>
+              <TouchableOpacity onPress={closeResetPasswordModal} style={styles.modalCloseBtn}>
+                <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>✕</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.modalContent}>
+
+            <View style={{ padding: normalize(20) }}>
               <TextInputWithButton
                 show icon
-                height={normalize(45)}
+                height={normalize(48)}
                 inputWidth={'100%'}
-                marginTop={normalize(15)}
+                marginTop={normalize(8)}
                 textColor={Colors.textInputColor}
                 InputHeaderText={'New Password'}
-                placeholder={'Enter new password'}
-                placeholderTextColor={Colors.black}
-                paddingLeft={normalize(15)}
-                borderColor={Colors.inputGreyBorder}
-                borderRadius={normalize(5)}
+                placeholder={'At least 6 characters'}
+                placeholderTextColor={MUTED}
+                paddingLeft={normalize(16)}
+                borderColor={BORDER}
+                borderRadius={normalize(10)}
                 editable
                 fontFamily={Fonts.MulishRegular}
                 isheadertext
                 value={password}
                 fontSize={normalize(14)}
-                headertxtsize={normalize(13)}
+                headertxtsize={normalize(12)}
                 onChangeText={e => setPassword(e)}
-                tintColor={Colors.tintGrey}
+                tintColor={ACCENT}
                 secureTextEntry
               />
               <TextInputWithButton
                 show icon
-                height={normalize(45)}
+                height={normalize(48)}
                 inputWidth={'100%'}
-                marginTop={normalize(15)}
+                marginTop={normalize(16)}
                 textColor={Colors.textInputColor}
                 InputHeaderText={'Confirm Password'}
-                placeholder={'Confirm new password'}
-                placeholderTextColor={Colors.black}
-                paddingLeft={normalize(15)}
-                borderColor={Colors.inputGreyBorder}
-                borderRadius={normalize(5)}
+                placeholder={'Repeat new password'}
+                placeholderTextColor={MUTED}
+                paddingLeft={normalize(16)}
+                borderColor={BORDER}
+                borderRadius={normalize(10)}
                 editable
                 fontFamily={Fonts.MulishRegular}
                 isheadertext
                 value={confirmPassword}
                 fontSize={normalize(14)}
-                headertxtsize={normalize(13)}
+                headertxtsize={normalize(12)}
                 onChangeText={e => setConfirmPassword(e)}
-                tintColor={Colors.tintGrey}
+                tintColor={ACCENT}
                 secureTextEntry
               />
-            </View>
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity style={styles.modalCancelButton} onPress={closeResetPasswordModal}>
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSubmitButton} onPress={handleResetPassword}>
-                <Text style={styles.modalSubmitButtonText}>Submit</Text>
-              </TouchableOpacity>
+
+              <View style={[styles.editActions, { marginTop: normalize(24) }]}>
+                <TouchableOpacity style={[styles.btnOutline, { borderColor: BORDER }]} onPress={closeResetPasswordModal}>
+                  <Text style={[styles.btnOutlineText, { color: MUTED }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btnFill, { backgroundColor: ACCENT }]} onPress={handleResetPassword}>
+                  <Text style={styles.btnFillText}>Update</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -521,234 +504,211 @@ const MyProfile = props => {
   );
 };
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+const InfoRow = ({ icon, label, value, TEXT, MUTED, ACCENT, last }) => (
+  <View style={[styles.infoRow, !last && styles.infoRowBorder]}>
+    <View style={[styles.infoIconBox, { backgroundColor: ACCENT + '18' }]}>
+      <Icon name={icon} size={15} color={ACCENT} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={[styles.infoLabel, { color: MUTED }]}>{label}</Text>
+      <Text style={[styles.infoValue, { color: TEXT }]} numberOfLines={1}>
+        {value || '—'}
+      </Text>
+    </View>
+  </View>
+);
+
+const ActionButton = ({ label, emoji, bg, onPress }) => (
+  <TouchableOpacity
+    style={[styles.actionBtn, { backgroundColor: bg }]}
+    onPress={onPress}
+    activeOpacity={0.82}
+  >
+    <Text style={styles.actionEmoji}>{emoji}</Text>
+    <Text style={styles.actionLabel}>{label}</Text>
+  </TouchableOpacity>
+);
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
+  root: { flex: 1 },
+
+  // Hero
+  heroBanner: {
     alignItems: 'center',
+    paddingTop: normalize(36),
+    paddingBottom: normalize(36),
+    overflow: 'hidden',
+    position: 'relative',
   },
-  scrollView: {
-    flex: 1,
-    backgroundColor: '#34495e',
-    width: '100%',
+  decCircle1: {
+    position: 'absolute', width: 180, height: 180, borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.06)', top: -40, right: -40,
   },
-  scrollViewContent: {
-    paddingBottom: normalize(100),
+  decCircle2: {
+    position: 'absolute', width: 120, height: 120, borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.07)', bottom: -20, left: -20,
   },
-  header: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: normalize(14),
   },
-  profileImageContainer: {
-    marginBottom: 15,
+  avatarImage: {
+    width: normalize(96), height: normalize(96),
+    borderRadius: normalize(48),
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)',
   },
-  profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: '#4CAF50',
+  avatarPlaceholder: {
+    width: normalize(96), height: normalize(96),
+    borderRadius: normalize(48),
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)',
   },
-  editImageOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
+  avatarInitials: {
+    fontSize: normalize(34), fontWeight: '800', color: '#fff',
   },
-  editImageText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-    textAlign: 'center',
+  cameraOverlay: {
+    position: 'absolute', bottom: 0, right: 0,
+    backgroundColor: '#4F46E5', borderRadius: normalize(16),
+    padding: normalize(6), borderWidth: 2, borderColor: '#fff',
   },
-  headerName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.white,
+  statusDot: {
+    position: 'absolute', bottom: 4, right: 0,
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#22C55E', borderWidth: 2.5, borderColor: '#fff',
   },
-  content: {
-    backgroundColor: '#fff',
-    margin: 15,
-    borderRadius: 10,
-    padding: 20,
-    elevation: 2,
+  heroName: {
+    fontSize: normalize(22), fontWeight: '800', color: '#fff',
+    letterSpacing: 0.3,
+  },
+  badgeRow: {
+    flexDirection: 'row', marginTop: normalize(10), gap: normalize(8),
+  },
+  badge: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: normalize(20),
+    paddingHorizontal: normalize(12), paddingVertical: normalize(4),
+  },
+  badgeText: {
+    color: '#fff', fontSize: normalize(12), fontWeight: '600',
+  },
+
+  // Cards
+  card: {
+    marginHorizontal: normalize(16),
+    marginTop: normalize(14),
+    borderRadius: normalize(16),
+    borderWidth: 1,
+    padding: normalize(18),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  sectionLabel: {
-    marginBottom: normalize(5),
-    borderLeftWidth: 3,
-    borderLeftColor: '#4CAF50',
-    paddingLeft: normalize(8),
+  cardTitle: {
+    fontSize: normalize(16), fontWeight: '700',
   },
-  sectionLabelText: {
-    fontSize: normalize(12),
-    fontWeight: '700',
-    color: '#4CAF50',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  cardSubtitle: {
+    fontSize: normalize(12), marginTop: normalize(3),
   },
-  readOnlyField: {
-    marginTop: normalize(15),
-    paddingHorizontal: normalize(12),
-    paddingVertical: normalize(10),
-    backgroundColor: '#f3f3f3',
-    borderRadius: normalize(5),
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+  cardRow: {
+    flexDirection: 'row', alignItems: 'center',
   },
-  readOnlyLabel: {
-    fontSize: normalize(11),
-    color: '#999',
-    marginBottom: 2,
-    fontWeight: '600',
+  cardRowTitle: {
+    fontSize: normalize(14), fontWeight: '600',
   },
-  readOnlyValue: {
-    fontSize: normalize(14),
-    color: '#555',
+  cardRowSub: {
+    fontSize: normalize(11), marginTop: 2,
   },
-  fieldContainer: {
-    marginBottom: 15,
+  iconBox: {
+    width: normalize(38), height: normalize(38), borderRadius: normalize(10),
+    backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center',
   },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 5,
+  divider: {
+    height: 1, backgroundColor: '#E2E8F0', marginVertical: normalize(14),
   },
-  fieldValue: {
-    fontSize: 16,
-    color: '#333',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+
+  // Info rows
+  infoRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: normalize(11),
   },
-  buttonContainer: {
-    padding: 20,
+  infoRowBorder: {
+    borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
   },
-  editButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 15,
-    borderRadius: 8,
-    alignItems: 'center',
+  infoIconBox: {
+    width: normalize(32), height: normalize(32), borderRadius: normalize(8),
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: normalize(12),
   },
-  editButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  infoLabel: {
+    fontSize: normalize(11), fontWeight: '500', marginBottom: 2,
   },
-  editButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  infoValue: {
+    fontSize: normalize(14), fontWeight: '600',
   },
-  saveButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-    flex: 0.48,
-    alignItems: 'center',
+
+  // Edit actions
+  editActions: {
+    flexDirection: 'row', gap: normalize(10),
   },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  btnOutline: {
+    flex: 1, borderWidth: 1.5, borderRadius: normalize(10),
+    paddingVertical: normalize(13), alignItems: 'center',
   },
-  cancelButton: {
-    backgroundColor: '#f44336',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-    flex: 0.48,
-    alignItems: 'center',
+  btnOutlineText: {
+    fontSize: normalize(14), fontWeight: '700',
   },
-  cancelButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  btnFill: {
+    flex: 1, borderRadius: normalize(10),
+    paddingVertical: normalize(13), alignItems: 'center',
   },
+  btnFillText: {
+    color: '#fff', fontSize: normalize(14), fontWeight: '700',
+  },
+
+  // Action buttons
+  actionsGroup: {
+    marginHorizontal: normalize(16),
+    marginTop: normalize(14),
+    gap: normalize(10),
+  },
+  actionBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: normalize(14),
+    paddingVertical: normalize(15),
+    paddingHorizontal: normalize(20),
+  },
+  actionEmoji: {
+    fontSize: 18, marginRight: normalize(12),
+  },
+  actionLabel: {
+    color: '#fff', fontSize: normalize(15), fontWeight: '700',
+  },
+
   // Modal
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    width: '90%',
-    maxWidth: 400,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+  modalBox: {
+    width: '90%', maxWidth: 420, borderRadius: normalize(18),
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 }, elevation: 12,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+  modalTop: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: normalize(20), paddingVertical: normalize(16),
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  modalTopTitle: {
+    color: '#fff', fontSize: normalize(17), fontWeight: '800',
   },
-  modalCloseButton: { padding: 5 },
-  modalCloseText: {
-    fontSize: 24,
-    color: '#666',
-    fontWeight: 'bold',
-  },
-  modalContent: { padding: 20 },
-  modalButtonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 10,
-  },
-  modalCancelButton: {
-    backgroundColor: '#f44336',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-    flex: 0.45,
-    alignItems: 'center',
-  },
-  modalCancelButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalSubmitButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-    flex: 0.45,
-    alignItems: 'center',
-  },
-  modalSubmitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  modalCloseBtn: {
+    padding: normalize(4),
   },
 });
 

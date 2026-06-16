@@ -18,11 +18,13 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import normalize from '../utils/helpers/normalize';
 import {Colors, Fonts, Images} from '../themes/ThemePath';
+import {useAppTheme} from '../themes/ThemeContext';
 
 export default function DrawerMenu(props) {
   const [modalVisible, setModalVisible] = useState(props.modalVisible);
   const [open, setOpen] = useState(false);
   const [modalOpen, setmodalOpen] = useState(false);
+  const { colors } = useAppTheme();
 
   function onBackdropPress() {
     if (props.onBackdropPress) {
@@ -111,14 +113,14 @@ export default function DrawerMenu(props) {
                 height: normalize(18),
                 width: normalize(18),
                 marginHorizontal: normalize(20),
-                tintColor: '#B7B7B7',
+                  tintColor: colors.mutedText,
               }}
               resizeMode="contain"
             />
 
             <Text
               style={{
-                color: '#373D3F',
+                  color: colors.text,
                 fontFamily: Fonts.MulishMedium,
                 fontSize: normalize(12),
                 textTransform: 'capitalize',
@@ -155,18 +157,19 @@ export default function DrawerMenu(props) {
         <SafeAreaView
           style={{
             flex: 1,
-            backgroundColor: Colors.white,
+            backgroundColor: colors.surface,
             width: '80%',
             borderTopRightRadius: normalize(15),
             borderBottomRightRadius: normalize(15),
-            backgroundColor: Colors.white,
+            borderColor: colors.border,
+            borderWidth: 1,
           }}>
           <View
             style={{
               flex: 1,
               borderTopRightRadius: normalize(15),
               borderBottomRightRadius: normalize(15),
-              backgroundColor: Colors.white,
+                backgroundColor: colors.surface,
               width: '100%',
               overflow: 'hidden',
             }}>
