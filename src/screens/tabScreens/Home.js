@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
   Modal,
+  StatusBar,
 } from 'react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '../../components/Header';
@@ -30,48 +31,31 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { useIsFocused } from '@react-navigation/native';
 
-// ─── Theme tokens ─────────────────────────────────────────────────────────────
-const LIGHT = {
-  bg: '#f1f5f9',
-  card: '#ffffff',
-  border: '#e2e8f0',
-  text: '#0f172a',
-  subtext: '#64748b',
-  label: '#94a3b8',
-  accent: '#2563eb',
-  dotBorder: '#ffffff',
-  divider: '#f1f5f9',
-  toggleBg: '#e2e8f0',
-  toggleIcon: '🌙',
-  photoLabel: '#475569',
-  photoBg: '#f8fafc',
-  photoBorder: '#e2e8f0',
-};
-
-const DARK = {
-  bg: '#0f172a',
-  card: '#1e293b',
-  border: '#334155',
-  text: '#f1f5f9',
-  subtext: '#94a3b8',
-  label: '#64748b',
-  accent: '#38bdf8',
-  dotBorder: '#1e293b',
-  divider: '#0f172a',
-  toggleBg: '#334155',
-  toggleIcon: '☀️',
-  photoLabel: '#94a3b8',
-  photoBg: '#0f172a',
-  photoBorder: '#334155',
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+const C = {
+  bg:         '#F0F4FF',
+  card:       '#FFFFFF',
+  border:     '#E8EDF5',
+  text:       '#0D1B3E',
+  subtext:    '#5B6B8A',
+  label:      '#9BA8C0',
+  accent:     '#3B5BDB',
+  accentMid:  '#4C6EF5',
+  accentSoft: '#EEF2FF',
+  green:      '#12B76A',
+  greenBg:    '#ECFDF5',
+  orange:     '#F97316',
+  orangeBg:   '#FFF7ED',
+  blue:       '#3B82F6',
+  blueBg:     '#EFF6FF',
+  danger:     '#EF4444',
+  heroTop:    '#1E3A8A',
+  heroBot:    '#3B5BDB',
+  white:      '#FFFFFF',
+  shadow:     'rgba(59, 91, 219, 0.14)',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-/**
- * API status values:
- *   "not_clocked_in" → Clock In button
- *   "clocked_in"     → Clock Out button  (check_in set, check_out null)
- *   "completed"      → Attendance complete (check_in + check_out both set)
- */
 const deriveClockState = response => {
   if (!response) return { label: 'Clock In', canAct: true, colorKey: 'in' };
   const { status } = response;
@@ -83,28 +67,23 @@ const deriveClockState = response => {
 };
 
 const deriveAttendanceLabel = response => {
-  if (!response) return { text: '—', color: '#94a3b8' };
+  if (!response) return { text: 'Not Clocked', color: C.danger };
   const { status } = response;
-  if (status === 'clocked_in') return { text: 'Clocked In', color: '#22c55e' };
-  if (status === 'completed') return { text: 'Completed', color: '#3b82f6' };
-  return { text: 'Not Clocked', color: '#ef4444' };
+  if (status === 'clocked_in') return { text: 'Clocked In', color: C.green };
+  if (status === 'completed')  return { text: 'Completed',  color: C.blue };
+  return { text: 'Not Clocked', color: C.danger };
 };
 
 const formatMinutes = minutes => {
   if (!minutes) return '0h 00m';
-  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(
-    2,
-    '0',
-  )}m`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
 };
 
 const formatElapsed = totalSeconds => {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(
-    s,
-  ).padStart(2, '0')}`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
 const getInitials = (first, last) =>
@@ -112,9 +91,7 @@ const getInitials = (first, last) =>
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
 const openAppSettings = () =>
-  Platform.OS === 'ios'
-    ? Linking.openURL('app-settings:')
-    : Linking.openSettings();
+  Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings();
 
 const showSettingsAlert = permissionType => {
   Alert.alert(
@@ -153,7 +130,7 @@ const requestCameraPermission = async () => {
     const next = await Camera.requestCameraPermission();
     return next === 'granted';
   }
-  return false; // permanently denied
+  return false;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -166,38 +143,35 @@ const Home = props => {
 
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [isDark, setIsDark] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [previewUri, setPreviewUri] = useState(null); // full-screen photo preview
+  const [previewUri, setPreviewUri] = useState(null);
 
-  const timerRef = useRef(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  const T = isDark ? DARK : LIGHT;
+  const timerRef   = useRef(null);
+  const pulseAnim  = useRef(new Animated.Value(1)).current;
+  const fadeAnim   = useRef(new Animated.Value(0)).current;
+  const slideAnim  = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1, duration: 450, useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.04,
-          duration: 850,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          toValue: 1.035, duration: 900,
+          easing: Easing.inOut(Easing.ease), useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 850,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          toValue: 1, duration: 900,
+          easing: Easing.inOut(Easing.ease), useNativeDriver: true,
         }),
       ]),
     ).start();
@@ -205,28 +179,19 @@ const Home = props => {
 
   // ── Data ─────────────────────────────────────────────────────────────────────
   const userDetails = ProfileReducer?.userDetailsResponse || {};
-  const attendResp = ProfileReducer?.attendenceStatusResponse || {};
+  const attendResp  = ProfileReducer?.attendenceStatusResponse || {};
 
-  // ── Live elapsed timer (only while clocked_in) ───────────────────────────────
+  // ── Live timer ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (attendResp?.status === 'clocked_in' && attendResp?.check_in) {
-      const initial = Math.max(
-        0,
-        Math.floor(moment().diff(moment(attendResp.check_in), 'seconds')),
-      );
+      const initial = Math.max(0, Math.floor(moment().diff(moment(attendResp.check_in), 'seconds')));
       setElapsedSeconds(initial);
       timerRef.current = setInterval(() => setElapsedSeconds(p => p + 1), 1000);
     } else {
       setElapsedSeconds(0);
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [attendResp?.status, attendResp?.check_in]);
 
   // ── Fetch on focus ────────────────────────────────────────────────────────────
@@ -240,69 +205,40 @@ const Home = props => {
       .catch(() => showErrorAlert('Please connect to internet'));
   }, [isFocused]);
 
-  // ── Clock action: sequential permissions → GPS → navigate ────────────────────
+  // ── Clock action ─────────────────────────────────────────────────────────────
   const handleClockAction = async () => {
     try {
       setLoading(true);
       setLoadingMessage('Checking location permission...');
-
       const locGranted = await requestLocationPermission();
-      if (!locGranted) {
-        setLoading(false);
-        setLoadingMessage('');
-        showSettingsAlert('Location');
-        return;
-      }
+      if (!locGranted) { setLoading(false); setLoadingMessage(''); showSettingsAlert('Location'); return; }
 
       setLoadingMessage('Checking camera permission...');
       const camGranted = await requestCameraPermission();
-      if (!camGranted) {
-        setLoading(false);
-        setLoadingMessage('');
-        showSettingsAlert('Camera');
-        return;
-      }
+      if (!camGranted) { setLoading(false); setLoadingMessage(''); showSettingsAlert('Camera'); return; }
 
       setLoadingMessage('Fetching your location...');
       const locationData = await new Promise((resolve, reject) => {
         Geolocation.getCurrentPosition(
-          pos =>
-            resolve({
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-            }),
+          pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
           err => {
-            const msgs = {
-              1: 'Permission denied.',
-              2: 'Unavailable.',
-              3: 'Timed out.',
-            };
-            reject(
-              new Error(
-                'Unable to fetch location. ' + (msgs[err.code] || 'Try again.'),
-              ),
-            );
+            const msgs = { 1: 'Permission denied.', 2: 'Unavailable.', 3: 'Timed out.' };
+            reject(new Error('Unable to fetch location. ' + (msgs[err.code] || 'Try again.')));
           },
           { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 },
         );
       });
 
-      setLoading(false);
-      setLoadingMessage('');
-
+      setLoading(false); setLoadingMessage('');
       props.navigation.navigate('Attendence', {
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         pagename: 'Home',
-        attendenceStatus:
-          attendResp?.status === 'clocked_in' ? 'clockout' : 'clockin',
+        attendenceStatus: attendResp?.status === 'clocked_in' ? 'clockout' : 'clockin',
       });
     } catch (error) {
-      setLoading(false);
-      setLoadingMessage('');
-      showErrorAlert(
-        error.message || 'Failed to get location. Please try again.',
-      );
+      setLoading(false); setLoadingMessage('');
+      showErrorAlert(error.message || 'Failed to get location. Please try again.');
     }
   };
 
@@ -311,63 +247,49 @@ const Home = props => {
   }
 
   // ── Derived values ────────────────────────────────────────────────────────────
-  const clockState = deriveClockState(attendResp);
-  const attLabel = deriveAttendanceLabel(attendResp);
+  const clockState  = deriveClockState(attendResp);
+  const attLabel    = deriveAttendanceLabel(attendResp);
 
-  const fullName =
-    `${userDetails?.first_name || ''} ${userDetails?.last_name || ''}`.trim() ||
-    '—';
-  const initials = getInitials(userDetails?.first_name, userDetails?.last_name);
-  const empCode = userDetails?.employee_code || '';
-  const phone = userDetails?.phone || '—';
+  const fullName    = `${userDetails?.first_name || ''} ${userDetails?.last_name || ''}`.trim() || '—';
+  const initials    = getInitials(userDetails?.first_name, userDetails?.last_name);
+  const empCode     = userDetails?.employee_code || '';
+  const phone       = userDetails?.phone || '—';
   const workLocation = userDetails?.work_location || '—';
-  const userStatus = userDetails?.status || '';
+  const userStatus  = userDetails?.status || '';
 
   const isLiveTimer = attendResp?.status === 'clocked_in';
   const isCompleted = attendResp?.status === 'completed';
 
   const hoursDisplay = isLiveTimer
     ? formatElapsed(elapsedSeconds)
-    : isCompleted
-    ? formatMinutes(attendResp?.working_minutes)
-    : '—';
+    : isCompleted ? formatMinutes(attendResp?.working_minutes) : '—';
 
-  // Single photo slot logic:
-  // • default (not clocked in) → default placeholder image
-  // • clocked_in              → check_in_picture
-  // • completed               → check_out_picture
-  let photoUri = null; // null = show default placeholder
-  let photoLabel = 'No Attendance Yet';
-  let photoTime = '';
-  let photoLabelColor = T.label;
-
+  let photoUri = null, photoLabel = 'No Attendance Yet', photoTime = '', photoLabelColor = C.label;
   if (isCompleted && attendResp?.check_out_picture) {
-    photoUri = attendResp.check_out_picture;
-    photoLabel = 'Check-Out Photo';
-    photoTime = attendResp.check_out
-      ? moment(attendResp.check_out).local().format('h:mm A')
-      : '';
-    photoLabelColor = '#f97316';
+    photoUri = attendResp.check_out_picture; photoLabel = 'Check-Out Photo';
+    photoTime = attendResp.check_out ? moment(attendResp.check_out).local().format('h:mm A') : '';
+    photoLabelColor = C.orange;
   } else if (isLiveTimer && attendResp?.check_in_picture) {
-    photoUri = attendResp.check_in_picture;
-    photoLabel = 'Check-In Photo';
-    photoTime = attendResp.check_in
-      ? moment(attendResp.check_in).local().format('h:mm A')
-      : '';
-    photoLabelColor = '#22c55e';
+    photoUri = attendResp.check_in_picture; photoLabel = 'Check-In Photo';
+    photoTime = attendResp.check_in ? moment(attendResp.check_in).local().format('h:mm A') : '';
+    photoLabelColor = C.green;
   }
 
-  const btnColors = { in: '#22c55e', out: '#f97316', done: '#3b82f6' };
-  const btnColor = btnColors[clockState.colorKey];
+  const btnColors = { in: C.green, out: C.orange, done: C.blue };
+  const btnColor  = btnColors[clockState.colorKey];
 
-  const s = makeStyles(T);
+  // Status chip config
+  const statusChip = {
+    'clocked_in': { bg: C.greenBg, color: C.green, dot: C.green },
+    'completed':  { bg: C.blueBg,  color: C.blue,  dot: C.blue },
+  }[attendResp?.status] || { bg: '#FEF2F2', color: C.danger, dot: C.danger };
 
   return (
     <View style={s.root}>
+      <StatusBar barStyle="light-content" backgroundColor={C.heroTop} />
+
       <Header
-        HeaderLogo
-        Title
-        placeText={'Home'}
+        HeaderLogo Title placeText={'Home'}
         onPress_back_button={() => {}}
         onPress_right_button={() => props.navigation.navigate('Notification')}
       />
@@ -381,187 +303,132 @@ const Home = props => {
         loadingText={loadingMessage || 'Loading...'}
       />
 
-      {/* ── Full-screen photo preview modal ── */}
-      <Modal
-        visible={!!previewUri}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewUri(null)}
-      >
-        <TouchableOpacity
-          style={s.previewOverlay}
-          activeOpacity={1}
-          onPress={() => setPreviewUri(null)}
-        >
-          <Image
-            source={{ uri: previewUri }}
-            style={s.previewImage}
-            resizeMode="contain"
-          />
-          <Text style={s.previewClose}>✕ Tap anywhere to close</Text>
+      {/* ── Full-screen photo preview ── */}
+      <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
+        <TouchableOpacity style={s.previewOverlay} activeOpacity={1} onPress={() => setPreviewUri(null)}>
+          <Image source={{ uri: previewUri }} style={s.previewImage} resizeMode="contain" />
+          <Text style={s.previewClose}>✕  Tap anywhere to close</Text>
         </TouchableOpacity>
       </Modal>
 
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View style={{ opacity: fadeAnim }}>
-          {/* ── Top bar ── */}
-          <View style={s.topRow}>
-            <View>
-              <Text style={s.dateDayText}>
-                {moment().format('dddd').toUpperCase()}
-              </Text>
-              <Text style={s.dateFullText}>
-                {moment().format('MMM D, YYYY')}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={s.themeToggle}
-              onPress={() => setIsDark(p => !p)}
-              activeOpacity={0.8}
-            >
-              <Text style={s.themeToggleIcon}>{T.toggleIcon}</Text>
-            </TouchableOpacity>
-          </View>
+      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-          {/* ── Profile Card ── */}
-          <View style={s.profileCard}>
-            <View style={s.avatarWrapper}>
-              {userDetails?.photo ? (
-                <Image
-                  resizeMode="cover"
-                  style={s.avatar}
-                  source={{ uri: userDetails.photo }}
-                />
-              ) : (
-                <View style={[s.avatar, s.initialsBox]}>
-                  <Text style={s.initialsText}>{initials}</Text>
-                </View>
-              )}
-              <View
-                style={[s.onlineDot, { backgroundColor: attLabel.color }]}
-              />
-            </View>
+          {/* ── Hero Profile Card ── */}
+          <View style={s.heroCard}>
+            {/* Decorative circle accents */}
+            <View style={s.heroCircle1} />
+            <View style={s.heroCircle2} />
 
-            <View style={s.profileInfo}>
-              <View style={s.nameRow}>
-                <Text style={s.userName} numberOfLines={1}>
-                  {fullName}
-                </Text>
-                {!!userStatus && (
-                  <View
-                    style={[
-                      s.badge,
-                      {
-                        backgroundColor:
-                          userStatus === 'active' ? '#dcfce7' : '#fee2e2',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        s.badgeText,
-                        {
-                          color:
-                            userStatus === 'active' ? '#16a34a' : '#dc2626',
-                        },
-                      ]}
-                    >
-                      {userStatus}
-                    </Text>
+            <View style={s.heroTop}>
+              {/* Avatar */}
+              <View style={s.avatarRing}>
+                {userDetails?.photo ? (
+                  <Image resizeMode="cover" style={s.avatar} source={{ uri: userDetails.photo }} />
+                ) : (
+                  <View style={[s.avatar, s.initialsBox]}>
+                    <Text style={s.initialsText}>{initials}</Text>
                   </View>
                 )}
+                <View style={[s.onlineDot, { backgroundColor: attLabel.color }]} />
               </View>
-              {!!empCode && <Text style={s.empCode}>{empCode}</Text>}
-              <View style={s.metaRow}>
-                <View style={s.metaChip}>
-                  <Text style={s.metaIcon}>📞</Text>
-                  <Text style={s.metaText}>{phone}</Text>
+
+              {/* Name / code */}
+              <View style={s.heroInfo}>
+                <Text style={s.heroName} numberOfLines={1}>{fullName}</Text>
+                {!!empCode && <Text style={s.heroCode}>{empCode}</Text>}
+                <View style={s.heroMeta}>
+                  {!!workLocation && (
+                    <View style={s.metaChip}>
+                      <Text style={s.metaIcon}>📍</Text>
+                      <Text style={s.metaText}>{workLocation}</Text>
+                    </View>
+                  )}
+                  {!!phone && (
+                    <View style={s.metaChip}>
+                      <Text style={s.metaIcon}>📞</Text>
+                      <Text style={s.metaText}>{phone}</Text>
+                    </View>
+                  )}
                 </View>
-                <View style={s.metaChip}>
-                  <Text style={s.metaIcon}>📍</Text>
-                  <Text style={s.metaText}>{workLocation}</Text>
+              </View>
+
+              {/* Status badge */}
+              {!!userStatus && (
+                <View style={[s.statusBadge, { backgroundColor: userStatus === 'active' ? '#dcfce7' : '#fee2e2' }]}>
+                  <Text style={[s.statusBadgeText, { color: userStatus === 'active' ? '#15803d' : '#dc2626' }]}>
+                    {userStatus}
+                  </Text>
                 </View>
+              )}
+            </View>
+
+            {/* Date strip */}
+            <View style={s.heroDivider} />
+            <View style={s.heroDateRow}>
+              <Text style={s.heroWeekday}>{moment().format('dddd').toUpperCase()}</Text>
+              <Text style={s.heroDate}>{moment().format('MMMM D, YYYY')}</Text>
+
+              {/* Attendance pill */}
+              <View style={[s.attPill, { backgroundColor: statusChip.bg }]}>
+                <View style={[s.attPillDot, { backgroundColor: statusChip.dot }]} />
+                <Text style={[s.attPillText, { color: statusChip.color }]}>{attLabel.text}</Text>
               </View>
             </View>
           </View>
 
-          {/* ── Stats bar ── */}
-          <View style={s.statsBar}>
-            <View style={s.statCell}>
-              <Text style={s.statLabel}>Status</Text>
-              <Text
-                style={[s.statValue, { color: attLabel.color }]}
-                numberOfLines={1}
-              >
-                {attLabel.text}
+          {/* ── Stats Row ── */}
+          <View style={s.statsRow}>
+            {/* Check-In */}
+            <View style={s.statBox}>
+              <Text style={s.statBoxIcon}>🕐</Text>
+              <Text style={s.statBoxLabel}>Check In</Text>
+              <Text style={[s.statBoxValue, { color: C.green }]}>
+                {attendResp?.check_in ? moment(attendResp.check_in).local().format('h:mm A') : '—'}
               </Text>
             </View>
-            <View style={s.vDivider} />
-            <View style={s.statCell}>
-              <Text style={s.statLabel}>In</Text>
-              <Text style={s.statValue}>
-                {attendResp?.check_in
-                  ? moment(attendResp.check_in).local().format('h:mm A')
-                  : '—'}
-              </Text>
-            </View>
-            <View style={s.vDivider} />
-            <View style={s.statCell}>
-              <Text style={s.statLabel}>Out</Text>
-              <Text style={s.statValue}>
-                {attendResp?.check_out
-                  ? moment(attendResp.check_out).local().format('h:mm A')
-                  : '—'}
-              </Text>
-            </View>
-            <View style={s.vDivider} />
-            <View style={s.statCell}>
-              <Text style={s.statLabel}>
-                {isLiveTimer ? 'Elapsed' : 'Hours'}
-              </Text>
-              <Text style={[s.statValue, isLiveTimer && { color: '#22c55e' }]}>
+
+            {/* Hours / elapsed */}
+            <View style={[s.statBox, s.statBoxCenter]}>
+              <Text style={s.statBoxIcon}>{isLiveTimer ? '⏱' : '⌚'}</Text>
+              <Text style={s.statBoxLabel}>{isLiveTimer ? 'Elapsed' : 'Hours'}</Text>
+              <Text style={[s.statBoxValue, { color: isLiveTimer ? C.green : C.accent }]}>
                 {hoursDisplay}
               </Text>
+              {isLiveTimer && (
+                <View style={s.liveDotRow}>
+                  <View style={s.liveDot} />
+                  <Text style={s.liveLabel}>LIVE</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Check-Out */}
+            <View style={s.statBox}>
+              <Text style={s.statBoxIcon}>🕔</Text>
+              <Text style={s.statBoxLabel}>Check Out</Text>
+              <Text style={[s.statBoxValue, { color: C.orange }]}>
+                {attendResp?.check_out ? moment(attendResp.check_out).local().format('h:mm A') : '—'}
+              </Text>
             </View>
           </View>
 
-          {/* ── Live timer pill ── */}
-          {isLiveTimer && (
-            <View style={s.timerPill}>
-              <View style={s.timerDot} />
-              <Text style={s.timerLabel}>Live </Text>
-              <Text style={s.timerValue}>{formatElapsed(elapsedSeconds)}</Text>
-            </View>
-          )}
-
-          {/* ── Attendance Photo (single slot, always visible) ── */}
+          {/* ── Photo Card ── */}
           <View style={s.photoCard}>
-            <View style={s.photoHeader}>
-              <View
-                style={[s.photoLabelDot, { backgroundColor: photoLabelColor }]}
-              />
-              <Text style={[s.photoLabelText, { color: photoLabelColor }]}>
-                {photoLabel}
-              </Text>
+            <View style={s.photoCardHeader}>
+              <View style={[s.photoLabelDot, { backgroundColor: photoLabelColor }]} />
+              <Text style={[s.photoLabelText, { color: photoLabelColor }]}>{photoLabel}</Text>
               {!!photoTime && <Text style={s.photoTime}>{photoTime}</Text>}
             </View>
 
             <TouchableOpacity
-              activeOpacity={photoUri ? 0.85 : 1}
+              activeOpacity={photoUri ? 0.88 : 1}
               onPress={() => photoUri && setPreviewUri(photoUri)}
               style={s.photoThumbWrap}
             >
               {photoUri ? (
                 <>
-                  <Image
-                    source={{ uri: photoUri }}
-                    style={s.photoThumb}
-                    resizeMode="stretch"
-                  />
+                  <Image source={{ uri: photoUri }} style={s.photoThumb} resizeMode="cover" />
                   <View style={s.photoZoomBadge}>
                     <Text style={s.photoZoomIcon}>🔍</Text>
                   </View>
@@ -569,49 +436,31 @@ const Home = props => {
               ) : (
                 <View style={s.photoPlaceholder}>
                   <Text style={s.photoPlaceholderIcon}>📷</Text>
-                  <Text style={s.photoPlaceholderText}>
-                    Photo will appear{'\n'}after clock-in
-                  </Text>
+                  <Text style={s.photoPlaceholderText}>Photo will appear{'\n'}after clock-in</Text>
                 </View>
               )}
             </TouchableOpacity>
           </View>
 
           {/* ── Clock Button ── */}
-          <Animated.View
-            style={{
-              marginBottom: normalize(100),
-              transform: [{ scale: clockState.canAct ? pulseAnim : 1 }],
-            }}
-          >
+          <Animated.View style={{ transform: [{ scale: clockState.canAct ? pulseAnim : 1 }], marginBottom: normalize(8) }}>
             <TouchableOpacity
               disabled={!clockState.canAct}
-              style={[
-                s.clockBtn,
-                {
-                  backgroundColor: btnColor,
-                  opacity: clockState.canAct ? 1 : 0.6,
-                },
-              ]}
+              style={[s.clockBtn, { backgroundColor: btnColor, opacity: clockState.canAct ? 1 : 0.55 }]}
               onPress={handleClockAction}
-              activeOpacity={0.85}
+              activeOpacity={0.86}
             >
-              <Text style={s.clockBtnText}>
-                {clockState.colorKey === 'in'
-                  ? '▶  '
-                  : clockState.colorKey === 'out'
-                  ? '⏹  '
-                  : '✓  '}
-                {clockState.label}
+              <Text style={s.clockBtnIcon}>
+                {clockState.colorKey === 'in' ? '▶' : clockState.colorKey === 'out' ? '⏹' : '✓'}
               </Text>
+              <Text style={s.clockBtnText}>{clockState.label}</Text>
             </TouchableOpacity>
           </Animated.View>
 
           {!clockState.canAct && (
-            <Text style={s.hintText}>
-              Your attendance for today is complete.
-            </Text>
+            <Text style={s.hintText}>Attendance for today is complete.</Text>
           )}
+
         </Animated.View>
       </ScrollView>
     </View>
@@ -620,290 +469,197 @@ const Home = props => {
 
 export default Home;
 
-// ─── Dynamic styles factory ────────────────────────────────────────────────────
-const makeStyles = T =>
-  StyleSheet.create({
-    root: { flex: 1, backgroundColor: T.bg },
-    scroll: { flex: 1 },
-    scrollContent: {
-      paddingHorizontal: normalize(14),
-      paddingTop: normalize(10),
-      paddingBottom: normalize(60),
-    },
+// ─── Styles ────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: normalize(14),
+    paddingTop: normalize(10),
+    paddingBottom: normalize(100),
+  },
 
-    // Top row
-    topRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: normalize(10),
-    },
-    dateDayText: {
-      fontSize: normalize(10),
-      color: T.label,
-      fontFamily: Fonts.MulishSemiBold,
-      letterSpacing: 1.5,
-    },
-    dateFullText: {
-      fontSize: normalize(17),
-      color: T.text,
-      fontFamily: Fonts.MulishExtraBold,
-      marginTop: 1,
-    },
-    themeToggle: {
-      backgroundColor: T.toggleBg,
-      borderRadius: normalize(18),
-      width: normalize(34),
-      height: normalize(34),
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    themeToggleIcon: { fontSize: normalize(15) },
+  // ── Hero card ─────────────────────────────────────────────────────────────────
+  heroCard: {
+    backgroundColor: C.accent,
+    borderRadius: normalize(18),
+    padding: normalize(14),
+    marginBottom: normalize(10),
+    overflow: 'hidden',
+    // shadow
+    shadowColor: C.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  heroCircle1: {
+    position: 'absolute', top: -normalize(30), right: -normalize(20),
+    width: normalize(110), height: normalize(110),
+    borderRadius: normalize(55),
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  heroCircle2: {
+    position: 'absolute', bottom: normalize(30), right: normalize(10),
+    width: normalize(60), height: normalize(60),
+    borderRadius: normalize(30),
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
 
-    // Profile card
-    profileCard: {
-      backgroundColor: T.card,
-      borderRadius: normalize(14),
-      padding: normalize(12),
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: normalize(10),
-      borderWidth: 1,
-      borderColor: T.border,
-      gap: normalize(12),
-    },
-    avatarWrapper: { position: 'relative' },
-    avatar: {
-      height: normalize(60),
-      width: normalize(60),
-      borderRadius: normalize(30),
-      borderWidth: 2,
-      borderColor: T.border,
-    },
-    initialsBox: {
-      backgroundColor: T.accent + '1a',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    initialsText: {
-      fontSize: normalize(20),
-      color: T.accent,
-      fontFamily: Fonts.MulishExtraBold,
-    },
-    onlineDot: {
-      position: 'absolute',
-      bottom: 0,
-      right: 0,
-      width: normalize(12),
-      height: normalize(12),
-      borderRadius: normalize(6),
-      borderWidth: 2,
-      borderColor: T.dotBorder,
-    },
-    profileInfo: { flex: 1 },
-    nameRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: normalize(6),
-      marginBottom: 2,
-    },
-    userName: {
-      fontSize: normalize(15),
-      color: T.text,
-      fontFamily: Fonts.MulishExtraBold,
-      flex: 1,
-    },
-    badge: {
-      paddingHorizontal: normalize(6),
-      paddingVertical: normalize(2),
-      borderRadius: normalize(5),
-    },
-    badgeText: {
-      fontSize: normalize(9),
-      fontFamily: Fonts.MulishSemiBold,
-      textTransform: 'capitalize',
-    },
-    empCode: {
-      fontSize: normalize(11),
-      color: T.accent,
-      fontFamily: Fonts.MulishSemiBold,
-      marginBottom: normalize(4),
-      letterSpacing: 0.5,
-    },
-    metaRow: { flexDirection: 'row', gap: normalize(10), flexWrap: 'wrap' },
-    metaChip: { flexDirection: 'row', alignItems: 'center', gap: normalize(3) },
-    metaIcon: { fontSize: normalize(11) },
-    metaText: {
-      fontSize: normalize(11),
-      color: T.subtext,
-      fontFamily: Fonts.MulishMedium,
-    },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: normalize(10) },
 
-    // Stats bar
-    statsBar: {
-      backgroundColor: T.card,
-      borderRadius: normalize(12),
-      borderWidth: 1,
-      borderColor: T.border,
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: normalize(10),
-      marginBottom: normalize(10),
-    },
-    statCell: { flex: 1, alignItems: 'center' },
-    vDivider: { width: 1, height: normalize(28), backgroundColor: T.divider },
-    statLabel: {
-      fontSize: normalize(9),
-      color: T.label,
-      fontFamily: Fonts.MulishSemiBold,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-      marginBottom: 3,
-    },
-    statValue: {
-      fontSize: normalize(10),
-      color: T.text,
-      fontFamily: Fonts.MulishExtraBold,
-    },
+  avatarRing: { position: 'relative' },
+  avatar: {
+    height: normalize(52), width: normalize(52), borderRadius: normalize(26),
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)',
+  },
+  initialsBox: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  initialsText: {
+    fontSize: normalize(18), color: C.white, fontFamily: Fonts.MulishExtraBold,
+  },
+  onlineDot: {
+    position: 'absolute', bottom: 1, right: 1,
+    width: normalize(11), height: normalize(11), borderRadius: normalize(6),
+    borderWidth: 2, borderColor: C.accent,
+  },
 
-    // Live timer pill
-    timerPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      alignSelf: 'center',
-      backgroundColor: '#dcfce7',
-      borderRadius: normalize(20),
-      paddingVertical: normalize(5),
-      paddingHorizontal: normalize(14),
-      marginBottom: normalize(10),
-      gap: normalize(6),
-    },
-    timerDot: {
-      width: normalize(7),
-      height: normalize(7),
-      borderRadius: normalize(4),
-      backgroundColor: '#22c55e',
-    },
-    timerLabel: {
-      fontSize: normalize(11),
-      color: '#15803d',
-      fontFamily: Fonts.MulishSemiBold,
-    },
-    timerValue: {
-      fontSize: normalize(13),
-      color: '#15803d',
-      fontFamily: Fonts.MulishExtraBold,
-      letterSpacing: 0.5,
-    },
+  heroInfo: { flex: 1 },
+  heroName: {
+    fontSize: normalize(15), color: C.white, fontFamily: Fonts.MulishExtraBold, marginBottom: 1,
+  },
+  heroCode: {
+    fontSize: normalize(10), color: 'rgba(255,255,255,0.65)', fontFamily: Fonts.MulishSemiBold,
+    letterSpacing: 0.6, marginBottom: normalize(4),
+  },
+  heroMeta: { flexDirection: 'row', gap: normalize(8), flexWrap: 'wrap' },
+  metaChip: { flexDirection: 'row', alignItems: 'center', gap: normalize(3) },
+  metaIcon: { fontSize: normalize(10) },
+  metaText: { fontSize: normalize(10), color: 'rgba(255,255,255,0.72)', fontFamily: Fonts.MulishMedium },
 
-    // ── Attendance photo card (single slot) ───────────────────────────────────
-    photoCard: {
-      backgroundColor: T.card,
-      borderRadius: normalize(14),
-      borderWidth: 1,
-      borderColor: T.border,
-      padding: normalize(12),
-      marginBottom: normalize(12),
-    },
-    photoHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: normalize(6),
-      marginBottom: normalize(10),
-    },
-    photoLabelDot: {
-      width: normalize(8),
-      height: normalize(8),
-      borderRadius: normalize(4),
-    },
-    photoLabelText: {
-      fontSize: normalize(12),
-      fontFamily: Fonts.MulishExtraBold,
-      flex: 1,
-    },
-    photoTime: {
-      fontSize: normalize(11),
-      color: T.subtext,
-      fontFamily: Fonts.MulishMedium,
-    },
+  statusBadge: {
+    paddingHorizontal: normalize(7), paddingVertical: normalize(3),
+    borderRadius: normalize(6), alignSelf: 'flex-start',
+  },
+  statusBadgeText: { fontSize: normalize(9), fontFamily: Fonts.MulishSemiBold, textTransform: 'capitalize' },
 
-    photoThumbWrap: {
-      width: '100%',
-      height: normalize(180),
-      borderRadius: normalize(10),
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: T.border,
-    },
-    photoThumb: { width: '100%', height: '100%' },
-    photoZoomBadge: {
-      position: 'absolute',
-      bottom: 8,
-      right: 8,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      borderRadius: normalize(12),
-      paddingHorizontal: normalize(7),
-      paddingVertical: normalize(3),
-    },
-    photoZoomIcon: { fontSize: normalize(13) },
+  heroDivider: {
+    height: 1, backgroundColor: 'rgba(255,255,255,0.14)',
+    marginVertical: normalize(10),
+  },
+  heroDateRow: { flexDirection: 'row', alignItems: 'center', gap: normalize(8) },
+  heroWeekday: {
+    fontSize: normalize(9), color: 'rgba(255,255,255,0.55)',
+    fontFamily: Fonts.MulishSemiBold, letterSpacing: 1.2,
+  },
+  heroDate: {
+    fontSize: normalize(11), color: C.white, fontFamily: Fonts.MulishExtraBold, flex: 1,
+  },
 
-    // Placeholder state (no photo yet)
-    photoPlaceholder: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: T.photoBg,
-      gap: normalize(6),
-    },
-    photoPlaceholderIcon: { fontSize: normalize(32) },
-    photoPlaceholderText: {
-      fontSize: normalize(12),
-      color: T.label,
-      fontFamily: Fonts.MulishMedium,
-      textAlign: 'center',
-      lineHeight: normalize(18),
-    },
+  attPill: {
+    flexDirection: 'row', alignItems: 'center', gap: normalize(5),
+    paddingHorizontal: normalize(8), paddingVertical: normalize(3),
+    borderRadius: normalize(20),
+  },
+  attPillDot: { width: normalize(6), height: normalize(6), borderRadius: normalize(3) },
+  attPillText: { fontSize: normalize(10), fontFamily: Fonts.MulishExtraBold },
 
-    // Clock button
-    clockBtn: {
-      borderRadius: normalize(12),
-      paddingVertical: normalize(15),
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: normalize(8),
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      elevation: 5,
-    },
-    clockBtnText: {
-      fontSize: normalize(17),
-      color: '#fff',
-      fontFamily: Fonts.MulishExtraBold,
-      letterSpacing: 0.3,
-    },
+  // ── Stats row ─────────────────────────────────────────────────────────────────
+  statsRow: {
+    flexDirection: 'row', gap: normalize(8),
+    marginBottom: normalize(10),
+  },
+  statBox: {
+    flex: 1, backgroundColor: C.card, borderRadius: normalize(12),
+    paddingVertical: normalize(10), paddingHorizontal: normalize(8),
+    alignItems: 'center',
+    borderWidth: 1, borderColor: C.border,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  },
+  statBoxCenter: {
+    borderColor: C.accentSoft, backgroundColor: C.accentSoft,
+  },
+  statBoxIcon: { fontSize: normalize(16), marginBottom: normalize(3) },
+  statBoxLabel: {
+    fontSize: normalize(8), color: C.label, fontFamily: Fonts.MulishSemiBold,
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: normalize(3),
+  },
+  statBoxValue: {
+    fontSize: normalize(12), fontFamily: Fonts.MulishExtraBold,
+  },
+  liveDotRow: { flexDirection: 'row', alignItems: 'center', gap: normalize(3), marginTop: normalize(3) },
+  liveDot: {
+    width: normalize(5), height: normalize(5), borderRadius: normalize(3), backgroundColor: C.green,
+  },
+  liveLabel: { fontSize: normalize(8), color: C.green, fontFamily: Fonts.MulishExtraBold, letterSpacing: 0.8 },
 
-    hintText: {
-      textAlign: 'center',
-      fontSize: normalize(11),
-      marginBottom: normalize(100),
-      color: T.label,
-      fontFamily: Fonts.MulishMedium,
-    },
+  // ── Photo card ────────────────────────────────────────────────────────────────
+  photoCard: {
+    backgroundColor: C.card, borderRadius: normalize(14),
+    borderWidth: 1, borderColor: C.border,
+    padding: normalize(12), marginBottom: normalize(12),
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  },
+  photoCardHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: normalize(6), marginBottom: normalize(8),
+  },
+  photoLabelDot: { width: normalize(7), height: normalize(7), borderRadius: normalize(4) },
+  photoLabelText: { fontSize: normalize(12), fontFamily: Fonts.MulishExtraBold, flex: 1 },
+  photoTime: { fontSize: normalize(11), color: C.subtext, fontFamily: Fonts.MulishMedium },
 
-    // Full-screen photo preview
-    previewOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.92)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    previewImage: { width: '95%', height: '80%' },
-    previewClose: {
-      marginTop: normalize(16),
-      color: '#94a3b8',
-      fontFamily: Fonts.MulishMedium,
-      fontSize: normalize(13),
-    },
-  });
+  photoThumbWrap: {
+    width: '100%', height: normalize(160), borderRadius: normalize(10),
+    overflow: 'hidden', borderWidth: 1, borderColor: C.border,
+  },
+  photoThumb: { width: '100%', height: '100%' },
+  photoZoomBadge: {
+    position: 'absolute', bottom: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: normalize(10),
+    paddingHorizontal: normalize(7), paddingVertical: normalize(3),
+  },
+  photoZoomIcon: { fontSize: normalize(13) },
+
+  photoPlaceholder: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#F8FAFC', gap: normalize(5),
+  },
+  photoPlaceholderIcon: { fontSize: normalize(28) },
+  photoPlaceholderText: {
+    fontSize: normalize(11), color: C.label, fontFamily: Fonts.MulishMedium,
+    textAlign: 'center', lineHeight: normalize(17),
+  },
+
+  // ── Clock button ──────────────────────────────────────────────────────────────
+  clockBtn: {
+    borderRadius: normalize(14), paddingVertical: normalize(14),
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: normalize(8),
+    shadowColor: '#000', shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.18, shadowRadius: 10, elevation: 6,
+  },
+  clockBtnIcon: { fontSize: normalize(16), color: C.white },
+  clockBtnText: {
+    fontSize: normalize(16), color: C.white,
+    fontFamily: Fonts.MulishExtraBold, letterSpacing: 0.2,
+  },
+
+  hintText: {
+    textAlign: 'center', fontSize: normalize(11), color: C.label,
+    fontFamily: Fonts.MulishMedium, marginTop: normalize(4),
+  },
+
+  // ── Preview modal ─────────────────────────────────────────────────────────────
+  previewOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.93)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  previewImage: { width: '95%', height: '80%' },
+  previewClose: {
+    marginTop: normalize(14), color: '#94a3b8',
+    fontFamily: Fonts.MulishMedium, fontSize: normalize(13),
+  },
+});

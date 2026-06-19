@@ -2,18 +2,18 @@ import React from 'react';
 import {
   Text,
   TouchableOpacity,
-  View,
-  Image,
-  ImageBackground,
 } from 'react-native';
 
 
 import PropTypes from 'prop-types';
 import normalize from '../utils/helpers/normalize';
 import { Colors } from '../themes/ThemePath';
+import { useAppTheme } from '../themes/ThemeContext';
 
 
 export default function Button(props) {
+  const { colors } = useAppTheme();
+
   function onPress() {
     if (props.onPress) {
       props.onPress();
@@ -28,7 +28,7 @@ export default function Button(props) {
         height: props.height,
         width: props.width,
         borderRadius: normalize(8),
-        backgroundColor: props.backgroundColor,
+        backgroundColor: props.backgroundColor || colors.skyblue,
         justifyContent: props.justifyContent,
         alignItems: 'center',
         alignSelf: props.alignSelf,
@@ -57,7 +57,7 @@ export default function Button(props) {
         // numberOfLines={props.numberOfLines}
         style={{
           fontFamily: props.fontFamily,
-          color: props.textColor,
+          color: props.textColor || colors.white,
           fontSize: props.fontSize,
           fontWeight: props.fontWeight,
             textTransform: 'capitalize',

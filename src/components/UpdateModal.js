@@ -10,8 +10,11 @@ import {
 import Modal from 'react-native-modal';
 import { Fonts, Images, Colors } from '../themes/ThemePath'; // Adjust path as needed
 import constants from '../utils/helpers/constants';
+import { useAppTheme } from '../themes/ThemeContext';
 
 const UpdateModal = ({ isVisible, onClose }) => {
+  const { colors } = useAppTheme();
+
   return (
     <Modal
       isVisible={isVisible}
@@ -25,7 +28,7 @@ const UpdateModal = ({ isVisible, onClose }) => {
       onBackButtonPress={onClose}
       onBackdropPress={onClose}
     >
-      <View style={styles.modalMainConatiner}>
+      <View style={[styles.modalMainConatiner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
           <Image source={Images.cross} style={styles.closeIcon} />
         </TouchableOpacity>
@@ -33,12 +36,12 @@ const UpdateModal = ({ isVisible, onClose }) => {
         <View style={styles.headerRow}>
           <View style={styles.titleRow}>
             <Image source={Images.googleplay} style={styles.appIconSmall} />
-            <Text style={styles.titleText}>Update from google play store</Text>
+            <Text style={[styles.titleText, { color: colors.text }]}>Update from google play store</Text>
           </View>
         </View>
 
-        <Text style={styles.updateTitle}>Update available (V{constants?.APP_VERSION})</Text>
-        <Text style={styles.updateSubtitle}>
+        <Text style={[styles.updateTitle, { color: colors.text }]}>Update available (V{constants?.APP_VERSION})</Text>
+        <Text style={[styles.updateSubtitle, { color: colors.mutedText }]}>
           To use this app, download the latest version
         </Text>
 
@@ -47,7 +50,7 @@ const UpdateModal = ({ isVisible, onClose }) => {
           <Text style={styles.appName}>e-Attendence</Text>
         </View>
 
-        <Text style={styles.infoText}>
+        <Text style={[styles.infoText, { color: colors.mutedText }]}>
           For any further information please contact to Hr.
         </Text>
 
@@ -60,7 +63,7 @@ const UpdateModal = ({ isVisible, onClose }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.downloadBtn}
+            style={[styles.downloadBtn, { backgroundColor: colors.skyblue }]}
             onPress={() =>
               Linking.openURL(
                 'https://play.google.com/store/apps/details?id=com.ebsoms.app&pcampaignid=web_share',
@@ -84,6 +87,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     width: '100%',
     padding: 15,
+    borderWidth: 1,
   },
   closeBtn: {
     position: 'absolute',

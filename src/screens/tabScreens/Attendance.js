@@ -126,41 +126,40 @@ const Attendence = props => {
     }
   };
 
-  function onClockIn(capturedimage) {
-    const imageName = capturedimage.split('/').pop();
-    const imageType = 'image/jpeg';
-    const formData = new FormData();
-    formData.append('check_in', moment().format('HH:mm:ss'));
-    formData.append('latitude', latitude);
-    formData.append('longitude', longitude);
-    formData.append('method', 'gps');
-    formData.append('check_in_picture', {
-      uri:
-        Platform.OS === 'android'
-          ? capturedimage
-          : capturedimage.replace('file://', ''),
-      name: imageName,
-      type: imageType,
-    });
+function onClockIn(capturedimage) {
+  const imageName = capturedimage.split('/').pop();
+  const imageType = 'image/jpeg';
+  const formData = new FormData();
 
-    connectionrequest()
-      .then(() => {
-        dispatch(clockinRequest(formData));
-      })
-      .catch(err => {
-        console.log(err);
-        showErrorAlert('Please connect to internet');
-      });
-  }
+  formData.append('latitude', latitude);
+  formData.append('longitude', longitude);
+  formData.append('face_image', {
+    uri:
+      Platform.OS === 'android'
+        ? capturedimage
+        : capturedimage.replace('file://', ''),
+    name: imageName,
+    type: imageType,
+  });
+
+  connectionrequest()
+    .then(() => {
+      dispatch(clockinRequest(formData));
+    })
+    .catch(err => {
+      console.log(err);
+      showErrorAlert('Please connect to internet');
+    });
+}
   function onClockOut(capturedimage) {
     const imageName = capturedimage.split('/').pop();
     const imageType = 'image/jpeg';
     const formData = new FormData();
-    formData.append('check_out', moment().format('HH:mm:ss'));
+    // formData.append('check_out', moment().format('HH:mm:ss'));
     formData.append('latitude', latitude);
     formData.append('longitude', longitude);
-    formData.append('method', 'gps');
-    formData.append('check_out_picture', {
+    // formData.append('method', 'gps');
+    formData.append('face_image', {
       uri:
         Platform.OS === 'android'
           ? capturedimage

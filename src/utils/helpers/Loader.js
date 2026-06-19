@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import PropTypes from 'prop-types';
 import { Colors, Images } from '../../themes/ThemePath';
+import { useAppTheme } from '../../themes/ThemeContext';
 
 export default function Loader({ visible, text }) {
+  const { colors } = useAppTheme();
   const rippleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -106,7 +108,7 @@ export default function Loader({ visible, text }) {
             width: 120,
             height: 120,
             borderRadius: 60,
-            backgroundColor: Colors.button || '#ffffff',
+            backgroundColor: colors.skyblue,
             opacity: rippleOpacity,
             transform: [{ scale: rippleScale }],
           }}
@@ -127,7 +129,7 @@ export default function Loader({ visible, text }) {
           alignSelf: 'center',
           marginTop: 24,
           fontSize: 18,
-          color: '#ffffff',
+          color: colors.white,
           fontWeight: '600',
           textAlign: 'center',
           letterSpacing: 0.5,

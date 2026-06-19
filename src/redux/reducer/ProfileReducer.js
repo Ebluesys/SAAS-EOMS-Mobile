@@ -30,6 +30,7 @@ const initialState = {
   remainingLeavesResponse: {},
   userActivityResponse: {},
   resetPasswordResponse: {},
+  registerFaceResponse: {},
 };
 
 const ProfileSlice = createSlice({
@@ -227,6 +228,18 @@ const ProfileSlice = createSlice({
       state.error = action.error;
       state.status = action.type;
     },
+
+    registerFaceRequest(state, action) {
+      state.status = action.type;
+    },
+    registerFaceSuccess(state, action) {
+      state.registerFaceResponse = action.payload;
+      state.status = action.type;
+    },
+    registerFaceFailure(state, action) {
+      state.error = action.error;
+      state.status = action.type;
+    },
   },
 });
 
@@ -298,6 +311,10 @@ export const {
   resetPasswordRequest,
   resetPasswordSuccess,
   resetPasswordFailure,
+
+  registerFaceRequest,
+  registerFaceSuccess,
+  registerFaceFailure,
 } = ProfileSlice.actions;
 
 export default ProfileSlice.reducer;

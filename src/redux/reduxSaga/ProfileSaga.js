@@ -2,9 +2,7 @@ import { call, put, select, takeLatest } from 'redux-saga/effects';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getApi,
-  patchApi,
   postApi,
-  postApiWithParam,
   putApi,
 } from '../../utils/helpers/ApiRequest';
 
@@ -19,38 +17,18 @@ import {
   profileUpdateFailure,
   taskListSuccess,
   taskListFailure,
-  complitedTaskListSuccess,
-  complitedTaskListFailure,
-  addTaskSuccess,
-  addTaskFailure,
   applyLeaveSuccess,
   applyLeaveFailure,
-  municipalityRegisterSuccess,
-  municipalityRegisterFailure,
-  municipalityRegisterListFailure,
-  municipalityRegisterListSuccess,
-  municipalityOfficeListSuccess,
-  municipalityOfficeListFailure,
   leaveLogSuccess,
   leaveLogFailure,
   leaveCancelSuccess,
   leaveCancelFailure,
   leaveTypeSuccess,
   leaveTypeFailure,
-  taskLocationSuccess,
-  taskLocationFailure,
   attendenceStatusFailure,
   attendenceStatusSuccess,
-  startTaskSuccess,
-  startTaskFailure,
-  endTaskSuccess,
-  endTaskFailure,
   attendenceReportSuccess,
   attendenceReportFailure,
-  taskDoItLaterSuccess,
-  taskDoItLaterFailure,
-  taskApprovalListFailure,
-  taskApprovalListSuccess,
   holidayListFailure,
   holidayListSuccess,
   remainingLeavesFailure,
@@ -61,6 +39,8 @@ import {
   resetPasswordSuccess,
   updateTaskFailure,
   updateTaskSuccess,
+  registerFaceSuccess,
+  registerFaceFailure,
 } from '../reducer/ProfileReducer';
 import showErrorAlert from '../../utils/helpers/Toast';
 import {
@@ -145,14 +125,17 @@ export function* clockinSaga(action) {
       Accept: 'application/json',
       contenttype: 'multipart/form-data',
       accesstoken: items?.getTokenResponse,
+      'device-id': "VIVO-V27",
     };
 
     const response = yield call(
       postApi,
-      'attendance/clock-in',
+      'attendance/face-check-in',
       action.payload,
       Header,
     );
+    console.log('Clock-in response:', response);
+
     if (response?.data?.meta?.code == 200) {
       yield put(clockinSuccess(response?.data?.data));
       // showErrorAlert(response?.data?.meta?.message);
@@ -160,9 +143,13 @@ export function* clockinSaga(action) {
     } else {
       yield put(clockinFailure(response?.data?.data));
       // showErrorAlert(response?.data?.meta?.message);
+      console.log('Clock-in error:', response?.data?.meta?.message);
+      
       ShowMessage(response?.data?.meta?.message, 'error');
     }
   } catch (error) {
+    console.log("clock in error",error);
+    
     yield put(clockinFailure(error?.response?.data));
     // showErrorAlert(error?.response?.data?.meta?.message);
   }
@@ -172,15 +159,16 @@ export function* clockoutSaga(action) {
   let items = yield select(getItem);
 
   try {
-    let Header = {
+      let Header = {
       Accept: 'application/json',
       contenttype: 'multipart/form-data',
       accesstoken: items?.getTokenResponse,
+      'device-id': "VIVO-V27",
     };
 
     const response = yield call(
       postApi,
-      'attendance/clock-out',
+      'attendance/face-check-out',
       action.payload,
       Header,
     );
@@ -544,6 +532,36 @@ export function* resetPasswordSaga(action) {
     // showErrorAlert(error?.response?.data?.meta?.message);
   }
 }
+
+export function* registerFaceSaga(action) {
+  let items = yield select(getItem);
+
+  try {
+    let Header = {
+      Accept: 'application/json',
+      contenttype: 'multipart/form-data',
+      accesstoken: items?.getTokenResponse,
+    };
+
+    const response = yield call(
+      postApi,
+      'employee/saveFaceProfile',
+      action.payload,
+      Header,
+    );
+
+    if (response?.data?.meta?.code == 200) {
+      yield put(registerFaceSuccess(response?.data?.data));
+      showErrorAlert(response?.data?.meta?.message);
+    } else {
+      yield put(registerFaceFailure(response?.data?.data));
+      showErrorAlert(response?.data?.meta?.message);
+    }
+  } catch (error) {
+    yield put(registerFaceFailure(error?.response?.data));
+    // showErrorAlert(error?.response?.data?.meta?.message);
+  }
+}
 const watchFunction = [
   (function* () {
     yield takeLatest('Profile/userDetailsRequest', userDetailsSaga);
@@ -592,6 +610,9 @@ const watchFunction = [
   })(),
   (function* () {
     yield takeLatest('Profile/resetPasswordRequest', resetPasswordSaga);
+  })(),
+  (function* () {
+    yield takeLatest('Profile/registerFaceRequest', registerFaceSaga);
   })(),
 ];
 

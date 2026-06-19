@@ -24,226 +24,220 @@ import {
 import Loader from '../../utils/helpers/Loader';
 import { useIsFocused } from '@react-navigation/native';
 
+// ─── Color tokens ────────────────────────────────────────────────────
+const T = {
+  present:  { strip: '#1D9E75', badge_bg: '#E1F5EE', badge_text: '#0F6E56', stat: '#0F6E56' },
+  leave:    { strip: '#D85A30', badge_bg: '#FAECE7', badge_text: '#993C1D', stat: '#993C1D' },
+  holiday:  { strip: '#EF9F27', badge_bg: '#FAEEDA', badge_text: '#854F0B', stat: '#854F0B' },
+  absent:   { strip: '#B4B2A9', badge_bg: '#F1EFE8', badge_text: '#5F5E5A', stat: '#5F5E5A' },
+  pending:  { strip: '#378ADD', badge_bg: '#E6F1FB', badge_text: '#185FA5', stat: '#185FA5' },
+};
+
+const getToken = status => T[status] || T.absent;
+
+const BADGE_LABELS = {
+  present:    'Present',
+  leave:      'On leave',
+  holiday:    'Holiday',
+  absent:     'Absent',
+  pending:    'Pending',
+  clocked_in: 'Clocked in',
+  clocked_out:'Clocked out',
+};
+
 let status = '';
 
-const AttendenceReport = () => {
-  const dispatch = useDispatch();
+const AttendenceReport = ({ navigation }) => {
+  const dispatch    = useDispatch();
   const ProfileReducer = useSelector(state => state.ProfileReducer);
-  const isFocused = useIsFocused();
-  const [loading, setLoading] = useState(false);
-  const [attendenceList, setAttendenceList] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(
-    moment().format('YYYY-MM'),
-  );
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const isFocused   = useIsFocused();
+  const [attendenceList, setAttendenceList]     = useState([]);
+  const [selectedMonth, setSelectedMonth]       = useState(moment().format('YYYY-MM'));
+  const [showMonthPicker, setShowMonthPicker]   = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
-  const [activityData, setActivityData] = useState(null);
-console.log("ActivityData::::>>",activityData);
+  const [activityData, setActivityData]         = useState(null);
 
+  // ─── Network helpers ─────────────────────────────────────────────
   const onPressDate = date => {
     connectionrequest()
-      .then(() => {
-        dispatch(attendenceStatusRequest(date));
-      })
-      .catch(err => {
-        console.log(err);
-        showErrorAlert('Please connect to internet');
-      });
+      .then(() => dispatch(attendenceStatusRequest(date)))
+      .catch(() => showErrorAlert('Please connect to internet'));
   };
 
+  // ─── Month options (current year, up to today) ───────────────────
   const generateMonthOptions = () => {
-    const currentYear = moment().year();
-    const currentMonth = moment().month();
     const months = [];
-    for (let i = 0; i <= currentMonth; i++) {
+    for (let i = 0; i <= moment().month(); i++) {
       months.push({
-        value: moment().year(currentYear).month(i).format('YYYY-MM'),
-        label: moment().year(currentYear).month(i).format('MMMM YYYY'),
+        value: moment().month(i).format('YYYY-MM'),
+        label: moment().month(i).format('MMMM YYYY'),
       });
     }
     return months.reverse();
   };
-
   const monthOptions = generateMonthOptions();
 
-  const formatTime = time =>
-    time ? moment(time, 'HH:mm:ss').format('hh:mm A') : 'Not recorded';
-
-  const formatCalendarDate = dateString => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const getStatusColor = status => {
-    switch (status) {
-      case 'present':  return Colors.lightgreen  || '#E8F5E8';
-      case 'leave':    return Colors.lightred     || '#FFE8E8';
-      case 'holiday':  return Colors.lightYellow  || '#FFF8E1';
-      case 'pending':  return Colors.lightBlue    || '#E3F2FD';
-      default:         return '#F5F5F5'; // absent
-    }
-  };
-
-  const getStatusBadgeColor = status => {
-    switch (status) {
-      case 'present':  return '#4CAF50';
-      case 'leave':    return '#F44336';
-      case 'holiday':  return '#FF9800';
-      case 'pending':  return '#2196F3';
-      default:         return '#9E9E9E'; // absent
-    }
-  };
-const getStatusLabel = rawStatus => {
-  switch (rawStatus) {
-    case 'clocked_in':  return 'Clocked In';
-    case 'clocked_out': return 'Clocked Out';
-    case 'present':     return 'Present';
-    case 'absent':      return 'Absent';
-    case 'leave':       return 'On Leave';
-    case 'holiday':     return 'Holiday';
-    default:            return rawStatus
-        ? rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1)
-        : 'Unknown';
-  }
-};
-
-const getStatusPillStyle = rawStatus => {
-  switch (rawStatus) {
-    case 'clocked_in':
-    case 'present':
-      return { bg: '#E1F5EE', text: '#0F6E56' };
-    case 'clocked_out':
-      return { bg: '#E3F2FD', text: '#185FA5' };
-    case 'leave':
-      return { bg: '#FAECE7', text: '#993C1D' };
-    case 'holiday':
-      return { bg: '#FFF8E1', text: '#854F0B' };
-    default:
-      return { bg: '#F1EFE8', text: '#5F5E5A' };
-  }
-};
+  // ─── Data preparation ─────────────────────────────────────────────
   const prepareSummaryData = () => {
     if (!attendenceList || Object.keys(attendenceList).length === 0) return null;
-    const monthKey = Object.keys(attendenceList)[0];
-    return attendenceList[monthKey]?.summary;
+    return attendenceList[Object.keys(attendenceList)[0]]?.summary;
   };
 
-  // ✅ Updated: now reads { status, description } objects from API
   const prepareCalendarData = () => {
     if (!attendenceList || Object.keys(attendenceList).length === 0) return [];
-    const monthKey = Object.keys(attendenceList)[0];
-    const calendarData = attendenceList[monthKey]?.calendar;
+    const calendarData = attendenceList[Object.keys(attendenceList)[0]]?.calendar;
     if (!calendarData) return [];
-
     return Object.keys(calendarData)
       .sort()
       .map(date => {
-        const entry = calendarData[date];
-        // Support both old string format and new object format
-        const statusValue =
-          typeof entry === 'object' ? entry.status : entry;
-        const description =
-          typeof entry === 'object' ? entry.description : '';
-
-        return {
-          id: date,
-          date,
-          formattedDate: formatCalendarDate(date),
-          status: statusValue,
-          description,
-          backgroundColor: getStatusColor(statusValue),
-          badgeColor: getStatusBadgeColor(statusValue),
-        };
+        const entry       = calendarData[date];
+        const statusValue = typeof entry === 'object' ? entry.status : entry;
+        const description = typeof entry === 'object' ? entry.description : '';
+        const tok         = getToken(statusValue);
+        return { id: date, date, statusValue, description, tok };
       });
   };
 
-  const renderSummaryCard = (title, value, icon, color) => (
-    <View style={[styles.summaryCard, { borderLeftColor: color }]}>
-      <View style={styles.summaryCardContent}>
-        <Text style={styles.summaryCardTitle}>{title}</Text>
-        <Text style={[styles.summaryCardValue, { color }]}>{value}</Text>
-      </View>
-      <View style={[styles.summaryIcon, { backgroundColor: color + '20' }]}>
-        <Text style={[styles.summaryIconText, { color }]}>{icon}</Text>
-      </View>
+  // ─── Formatted helpers ────────────────────────────────────────────
+  const fmtTime = raw =>
+    raw ? moment(raw).format('hh:mm A') : '—';
+
+  const workingLabel = mins => {
+    if (!mins || mins <= 0) return 'In progress';
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  };
+
+  // ─── Renderers ───────────────────────────────────────────────────
+
+  /** Top month selector pill */
+  const renderMonthSelector = () => (
+    <TouchableOpacity
+      style={styles.monthPill}
+      onPress={() => setShowMonthPicker(true)}
+    >
+      <Text style={styles.monthPillText}>
+        {moment(selectedMonth).format('MMMM YYYY')}
+      </Text>
+      <Text style={styles.monthPillArrow}>▼</Text>
+    </TouchableOpacity>
+  );
+
+  /** Compact 2×2 stat inside the summary card */
+  const renderStatCell = (icon, value, label, statColor, shade) => (
+    <View style={[styles.statCell, { backgroundColor: shade }]}>
+      <Text style={[styles.statIcon, { color: statColor }]}>{icon}</Text>
+      <Text style={[styles.statValue, { color: statColor }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 
+  /** Monthly summary card */
   const renderSummarySection = () => {
-    const summary = prepareSummaryData();
-    if (!summary) return null;
+    const s = prepareSummaryData();
+    if (!s) return null;
+    const totalH    = parseFloat(s.total_working_hours)   || 0;
+    const expectedH = parseFloat(s.expected_working_hours) || 1;
+    const pct       = Math.min((totalH / expectedH) * 100, 100);
     return (
-      <View style={styles.summaryContainer}>
-        <Text style={styles.summaryTitle}>Monthly Summary</Text>
-        <View style={styles.summaryGrid}>
-          {renderSummaryCard('Present Days',   summary.total_present_days,                      '✓',  '#4CAF50')}
-          {renderSummaryCard('Leave Days',     summary.total_leave_days,                        '✗',  '#F44336')}
-          {renderSummaryCard('Absent Days',    summary.total_absent_days,                       '○',  '#FF9800')}
-          {renderSummaryCard('Working Hours',  `${summary.total_working_hours}h`,               '⏱',  '#9C27B0')}
-        </View>
-        {/* Expected vs Actual hours progress */}
-        <View style={styles.hoursProgressContainer}>
-          <View style={styles.hoursProgressHeader}>
-            <Text style={styles.hoursProgressLabel}>Working Hours Progress</Text>
-            <Text style={styles.hoursProgressValue}>
-              {summary.total_working_hours}h / {summary.expected_working_hours}h
+      <View style={styles.summaryCard}>
+        {/* Card header */}
+        <View style={styles.summaryCardHeader}>
+          <View>
+            <Text style={styles.overviewEyebrow}>Monthly overview</Text>
+            <Text style={styles.overviewMonth}>
+              {moment(selectedMonth).format('MMMM YYYY')}
             </Text>
           </View>
-          <View style={styles.hoursProgressTrack}>
-            <View
-              style={[
-                styles.hoursProgressFill,
-                {
-                  width: `${Math.min(
-                    (parseFloat(summary.total_working_hours) /
-                      parseFloat(summary.expected_working_hours)) *
-                      100,
-                    100,
-                  )}%`,
-                },
-              ]}
-            />
+          <View style={styles.onTrackBadge}>
+            <Text style={styles.onTrackText}>On track</Text>
+          </View>
+        </View>
+
+        {/* 2×2 stats grid */}
+        <View style={styles.statsGrid}>
+          {renderStatCell('✓', s.total_present_days,  'Present days',   T.present.stat, '#fff')}
+          {renderStatCell('✗', s.total_leave_days,    'Leave days',     T.leave.stat,   '#fff')}
+          {renderStatCell('○', s.total_absent_days,   'Absent days',    T.holiday.stat, '#FAFAF8')}
+          {renderStatCell('⏱', `${totalH}h`,          'Working hours',  '#534AB7',      '#FAFAF8')}
+        </View>
+
+        {/* Progress bar */}
+        <View style={styles.progressSection}>
+          <View style={styles.progressHeaderRow}>
+            <Text style={styles.progressLabel}>Hours progress</Text>
+            <Text style={styles.progressValue}>{totalH}h / {expectedH}h</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${pct}%` }]} />
           </View>
         </View>
       </View>
     );
   };
 
-  const renderMonthSelector = () => (
-    <View style={styles.monthSelectorContainer}>
-      <TouchableOpacity
-        style={styles.monthSelectorButton}
-        onPress={() => setShowMonthPicker(true)}
-      >
-        <Text style={styles.monthSelectorText}>
-          {moment(selectedMonth).format('MMMM YYYY')}
-        </Text>
-        <Text style={styles.monthSelectorArrow}>▼</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  /** Single day row card */
+  const renderCalendarItem = ({ item }) => {
+    const tok       = item.tok;
+    const dateObj   = new Date(item.date);
+    const dayNum    = dateObj.getDate().toString().padStart(2, '0');
+    const dayName   = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+    const fullDay   = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+    const label     = BADGE_LABELS[item.statusValue] ||
+      (item.statusValue
+        ? item.statusValue.charAt(0).toUpperCase() + item.statusValue.slice(1)
+        : 'Unknown');
 
+    return (
+      <TouchableOpacity
+        style={styles.dayCard}
+        activeOpacity={0.7}
+        onPress={() => onPressDate(item.id)}
+      >
+        {/* colored top strip */}
+        <View style={[styles.dayStrip, { backgroundColor: tok.strip }]} />
+        <View style={styles.dayRow}>
+          {/* date block */}
+          <View style={styles.dateBlock}>
+            <Text style={styles.dateNum}>{dayNum}</Text>
+            <Text style={styles.dateDay}>{dayName}</Text>
+          </View>
+          <View style={styles.dayDivider} />
+          {/* info */}
+          <View style={styles.dayInfo}>
+            <Text style={styles.dayFullName}>{fullDay}</Text>
+            {item.description ? (
+              <Text style={styles.dayDesc}>{item.description}</Text>
+            ) : null}
+          </View>
+          {/* badge */}
+          <View style={[styles.statusBadge, { backgroundColor: tok.badge_bg }]}>
+            <Text style={[styles.statusBadgeText, { color: tok.badge_text }]}>
+              {label}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  /** Month picker modal */
   const renderMonthPicker = () => (
     <Modal
       isVisible={showMonthPicker}
       onBackdropPress={() => setShowMonthPicker(false)}
-      style={styles.modalContainer}
+      style={styles.modalWrap}
     >
-      <View style={styles.modalContent}>
-        <Text style={styles.modalTitle}>Select Month</Text>
+      <View style={styles.pickerSheet}>
+        <View style={styles.sheetHandle} />
+        <Text style={styles.pickerTitle}>Select month</Text>
         <FlatList
           data={monthOptions}
           keyExtractor={item => item.value}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[
-                styles.monthOption,
-                selectedMonth === item.value && styles.selectedMonthOption,
+                styles.pickerOption,
+                selectedMonth === item.value && styles.pickerOptionSelected,
               ]}
               onPress={() => {
                 setSelectedMonth(item.value);
@@ -252,253 +246,177 @@ const getStatusPillStyle = rawStatus => {
             >
               <Text
                 style={[
-                  styles.monthOptionText,
-                  selectedMonth === item.value && styles.selectedMonthOptionText,
+                  styles.pickerOptionText,
+                  selectedMonth === item.value && styles.pickerOptionTextSelected,
                 ]}
               >
                 {item.label}
               </Text>
+              {selectedMonth === item.value && (
+                <Text style={styles.pickerCheck}>✓</Text>
+              )}
             </TouchableOpacity>
           )}
         />
         <TouchableOpacity
-          style={styles.modalCloseButton}
+          style={styles.pickerCloseBtn}
           onPress={() => setShowMonthPicker(false)}
         >
-          <Text style={styles.modalCloseButtonText}>Close</Text>
+          <Text style={styles.pickerCloseBtnText}>Close</Text>
         </TouchableOpacity>
       </View>
     </Modal>
   );
 
-const renderActivityModal = () => {
-  if (!activityData) return null;
+  /** Activity bottom-sheet modal */
+  const renderActivityModal = () => {
+    if (!activityData) return null;
+    const tok = getToken(activityData?.status);
+    const label =
+      BADGE_LABELS[activityData?.status] ||
+      (activityData?.status
+        ? activityData.status.charAt(0).toUpperCase() + activityData.status.slice(1)
+        : 'Unknown');
 
-  const pillStyle = getStatusPillStyle(activityData?.status);
-  const employeeName = ProfileReducer?.userDetailsResponse?.first_name + ' ' + ProfileReducer?.userDetailsResponse?.last_name || '';
-  const initials = employeeName
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+    const firstName = ProfileReducer?.userDetailsResponse?.first_name || '';
+    const lastName  = ProfileReducer?.userDetailsResponse?.last_name  || '';
+    const fullName  = `${firstName} ${lastName}`.trim();
+    const initials  = [firstName[0], lastName[0]]
+      .filter(Boolean).join('').toUpperCase();
 
-  const checkInTime  = activityData?.check_in
-    ? moment(activityData.check_in).format('hh:mm A')
-    : 'Not recorded';
-  const checkOutTime = activityData?.check_out
-    ? moment(activityData.check_out).format('hh:mm A')
-    : null;
-  const checkInPhoto  = activityData?.check_in_picture  || null;
-  const checkOutPhoto = activityData?.check_out_picture || null;
-  const workingMins   = activityData?.working_minutes   || 0;
-  const workingHours  = Math.floor(workingMins / 60);
-  const workingRem    = workingMins % 60;
-  const workingLabel  =
-    workingMins > 0
-      ? `${workingHours}h ${workingRem}m`
-      : 'In progress';
+    const checkInTime  = fmtTime(activityData?.check_in);
+    const checkOutTime = fmtTime(activityData?.check_out);
+    const formattedDate = activityData?.date
+      ? moment(activityData.date).format('dddd, MMM D YYYY')
+      : '';
 
-  const formattedDate = activityData?.date
-    ? moment(activityData.date).format('dddd, MMM D YYYY')
-    : '';
+    return (
+      <Modal
+        isVisible={showActivityModal}
+        onBackdropPress={() => setShowActivityModal(false)}
+        style={styles.modalWrap}
+        swipeDirection="down"
+        onSwipeComplete={() => setShowActivityModal(false)}
+      >
+        <View style={styles.activitySheet}>
+          <View style={styles.sheetHandle} />
 
-  return (
-    <Modal
-      isVisible={showActivityModal}
-      onBackdropPress={() => setShowActivityModal(false)}
-      style={styles.modalContainer}
-    >
-      <View style={styles.compactModalCard}>
-
-        {/* ── Header ── */}
-        <View style={styles.compactModalHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.compactModalDate}>{formattedDate}</Text>
-            <Text style={styles.compactModalTitle}>Daily Activity</Text>
-          </View>
-          <View style={styles.compactHeaderRight}>
-            <View style={[styles.statusPill, { backgroundColor: pillStyle.bg }]}>
-              <Text style={[styles.statusPillText, { color: pillStyle.text }]}>
-                {getStatusLabel(activityData?.status)}
-              </Text>
+          {/* Header */}
+          <View style={styles.activityHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activityDate}>{formattedDate}</Text>
+              <Text style={styles.activityTitle}>Daily activity</Text>
             </View>
-            <TouchableOpacity
-              style={styles.compactCloseBtn}
-              onPress={() => setShowActivityModal(false)}
-            >
-              <Text style={styles.compactCloseBtnText}>×</Text>
-            </TouchableOpacity>
+            <View style={styles.activityHeaderRight}>
+              <View style={[styles.statusBadge, { backgroundColor: tok.badge_bg }]}>
+                <Text style={[styles.statusBadgeText, { color: tok.badge_text }]}>
+                  {label}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeIconBtn}
+                onPress={() => setShowActivityModal(false)}
+              >
+                <Text style={styles.closeIconBtnText}>×</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
-
-          {/* ── Employee row ── */}
-          <View style={styles.compactEmployeeRow}>
-            <View style={styles.avatarCircle}>
+          {/* Employee row */}
+          <View style={styles.empRow}>
+            <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
             <View>
-              <Text style={styles.compactEmployeeName}>{employeeName}</Text>
-              <Text style={styles.compactEmployeeRole}>Employee</Text>
+              <Text style={styles.empName}>{fullName}</Text>
+              <Text style={styles.empRole}>Employee</Text>
             </View>
           </View>
 
-          {/* ── Check-in / Check-out cards ── */}
+          {/* Time cards */}
           <View style={styles.timeCardRow}>
-            <View style={[styles.timeCard, { opacity: 1 }]}>
+            <View style={styles.timeCard}>
               <Text style={styles.timeCardLabel}>Check in</Text>
               <Text style={styles.timeCardValue}>{checkInTime}</Text>
               <Text style={styles.timeCardSub}>
                 {activityData?.is_attendance_given ? 'Recorded' : 'Not recorded'}
               </Text>
             </View>
-            <View style={[styles.timeCard, { opacity: checkOutTime ? 1 : 0.5 }]}>
+            <View style={[styles.timeCard, !activityData?.check_out && styles.timeCardDim]}>
               <Text style={styles.timeCardLabel}>Check out</Text>
-              <Text style={styles.timeCardValue}>{checkOutTime ?? '—'}</Text>
+              <Text style={styles.timeCardValue}>{checkOutTime}</Text>
               <Text style={styles.timeCardSub}>
-                {checkOutTime ? 'Recorded' : 'Not yet'}
+                {activityData?.check_out ? 'Recorded' : 'Not yet'}
               </Text>
             </View>
           </View>
 
-          {/* ── Check-in Photo ── */}
-          {checkInPhoto && (
+          {/* Check-in photo */}
+          {activityData?.check_in_picture ? (
             <View style={styles.photoSection}>
-              <Text style={styles.photoSectionLabel}>Check-in photo</Text>
+              <Text style={styles.photoLabel}>Check-in photo</Text>
               <Image
-                source={{ uri: checkInPhoto }}
-                style={styles.compactPhoto}
+                source={{ uri: activityData.check_in_picture }}
+                style={styles.photo}
                 resizeMode="cover"
               />
             </View>
-          )}
+          ) : null}
 
-          {/* ── Check-out Photo ── */}
-          {checkOutPhoto && (
+          {/* Check-out photo */}
+          {activityData?.check_out_picture ? (
             <View style={styles.photoSection}>
-              <Text style={styles.photoSectionLabel}>Check-out photo</Text>
+              <Text style={styles.photoLabel}>Check-out photo</Text>
               <Image
-                source={{ uri: checkOutPhoto }}
-                style={styles.compactPhoto}
+                source={{ uri: activityData.check_out_picture }}
+                style={styles.photo}
                 resizeMode="cover"
               />
             </View>
-          )}
+          ) : null}
 
-          {/* ── Footer bar ── */}
-          <View style={styles.compactFooter}>
-            <Text style={styles.compactFooterText}>
+          {/* Footer */}
+          <View style={styles.activityFooter}>
+            <Text style={styles.activityFooterText}>
               Working hours:{' '}
-              <Text style={styles.compactFooterValue}>{workingLabel}</Text>
+              <Text style={styles.activityFooterVal}>
+                {workingLabel(activityData?.working_minutes)}
+              </Text>
             </Text>
             <TouchableOpacity
-              style={styles.compactFooterBtn}
+              style={styles.doneBtn}
               onPress={() => setShowActivityModal(false)}
             >
-              <Text style={styles.compactFooterBtnText}>Close</Text>
+              <Text style={styles.doneBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
-
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-};
-  // ✅ Updated: shows description below date for holidays
-  const renderCalendarItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.tableRow, { backgroundColor: item.backgroundColor }]}
-      onPress={() => onPressDate(item?.id)}
-    >
-      <View style={styles.dateColumn}>
-        <Text style={styles.dateText}>{item.formattedDate}</Text>
-        {item.description ? (
-          <Text style={styles.descriptionText}>{item.description}</Text>
-        ) : null}
-      </View>
-      <View style={styles.statusColumn}>
-        <View style={[styles.statusBadge, { backgroundColor: item.badgeColor }]}>
-          <Text style={styles.statusText}>
-            {item?.status?.charAt(0)?.toUpperCase() + item?.status?.slice(1)}
-          </Text>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </Modal>
+    );
+  };
 
-  const renderTableHeader = () => (
-    <View style={styles.tableHeader}>
-      <View style={styles.dateColumn}>
-        <Text style={styles.headerText}>Date</Text>
-      </View>
-      <View style={styles.statusColumn}>
-        <Text style={styles.headerText}>Status</Text>
-      </View>
-    </View>
-  );
-
-  const renderLegend = () => (
-    <View style={styles.legendContainer}>
-      <Text style={styles.legendTitle}>Status Legend</Text>
-      <View style={styles.legendRow}>
-        {[
-          { color: '#4CAF50', label: 'Present' },
-          { color: '#F44336', label: 'Leave' },
-          { color: '#FF9800', label: 'Holiday' },
-        ].map(item => (
-          <View key={item.label} style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: item.color }]} />
-            <Text style={styles.legendText}>{item.label}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={styles.legendRow}>
-        {[
-          { color: '#2196F3', label: 'Pending' },
-          { color: '#9E9E9E', label: 'Absent' },
-        ].map(item => (
-          <View key={item.label} style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: item.color }]} />
-            <Text style={styles.legendText}>{item.label}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-
+  // ─── Effects ──────────────────────────────────────────────────────
   useEffect(() => {
     if (isFocused) {
       connectionrequest()
-        .then(() => {
-          dispatch(attendenceReportRequest({ month: selectedMonth }));
-        })
-        .catch(err => {
-          console.log(err);
-          showErrorAlert('Please connect to internet');
-        });
+        .then(() => dispatch(attendenceReportRequest({ month: selectedMonth })))
+        .catch(() => showErrorAlert('Please connect to internet'));
     }
   }, [isFocused, selectedMonth]);
 
   useEffect(() => {
     if (ProfileReducer?.attendenceReportResponse) {
-      setAttendenceList(ProfileReducer?.attendenceReportResponse);
+      setAttendenceList(ProfileReducer.attendenceReportResponse);
     }
   }, [ProfileReducer?.attendenceReportResponse]);
 
-  if (status == '' || ProfileReducer.status != status) {
+  if (status === '' || ProfileReducer.status !== status) {
     switch (ProfileReducer.status) {
       case 'Profile/attendenceReportRequest':
-        status = ProfileReducer.status;
-        break;
       case 'Profile/attendenceReportSuccess':
-        status = ProfileReducer.status;
-        break;
       case 'Profile/attendenceReportFailure':
         status = ProfileReducer.status;
         break;
-
       case 'Profile/attendenceStatusRequest':
         status = ProfileReducer.status;
         break;
@@ -518,55 +436,65 @@ const renderActivityModal = () => {
   const calendarData = prepareCalendarData();
   const hasData = calendarData.length > 0 || prepareSummaryData() !== null;
 
+  // ─── Render ───────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <Header
         HeaderLogo
         Title
-        placeText={'Attendance Report'}
+        placeText={'Attendance'}
         onPress_back_button={() => navigation.goBack()}
       />
-      <Loader visible={ProfileReducer?.status == 'Profile/attendenceReportRequest'} />
+      <Loader
+        visible={ProfileReducer?.status === 'Profile/attendenceReportRequest'}
+      />
 
-      <View style={styles.topRightContainer}>{renderMonthSelector()}</View>
+      {/* Month selector */}
+      <View style={styles.monthRow}>{renderMonthSelector()}</View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {hasData ? (
           <>
             {renderSummarySection()}
-            <View style={styles.tableContainer}>
-              <View style={styles.tableTopSection}>
-                <Text style={styles.tableTitle}>Monthly Attendance</Text>
-              </View>
-              {calendarData.length > 0 ? (
-                <>
-                  {renderTableHeader()}
-                  <FlatList
-                    data={calendarData}
-                    keyExtractor={item => item.id}
-                    renderItem={renderCalendarItem}
-                    style={styles.calendarFlatList}
-                    showsVerticalScrollIndicator={false}
-                    scrollEnabled={false}
-                  />
-                  {renderLegend()}
-                </>
-              ) : (
-                <View style={styles.noDataContainer}>
-                  <Text style={styles.noDataText}>
-                    No attendance data available for this month
-                  </Text>
+
+            {calendarData.length > 0 && (
+              <View style={styles.section}>
+                {/* Section header */}
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Daily log</Text>
+                  <View style={styles.legendRow}>
+                    {[
+                      { color: T.present.strip, label: 'Present' },
+                      { color: T.leave.strip,   label: 'Leave'   },
+                      { color: T.absent.strip,  label: 'Absent'  },
+                    ].map(l => (
+                      <View key={l.label} style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: l.color }]} />
+                        <Text style={styles.legendText}>{l.label}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              )}
-            </View>
+
+                <FlatList
+                  data={calendarData}
+                  keyExtractor={item => item.id}
+                  renderItem={renderCalendarItem}
+                  scrollEnabled={false}
+                  ItemSeparatorComponent={() => <View style={{ height: normalize(6) }} />}
+                />
+              </View>
+            )}
           </>
         ) : (
-          <View style={styles.noDataMainContainer}>
-            <Text style={styles.noDataMainText}>
-              No data available for selected month
-            </Text>
-            <Text style={styles.noDataSubText}>
-              Please select a different month or check back later
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No data for this month</Text>
+            <Text style={styles.emptySubtitle}>
+              Try selecting a different month above
             </Text>
           </View>
         )}
@@ -583,481 +511,451 @@ export default AttendenceReport;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgColor,
-    paddingHorizontal: 10,
+    backgroundColor: '#F2F3F7',
   },
-  scrollView: {
-    flex: 1,
-    marginBottom: 100,
-  },
-
-  // ── Summary ──
-  summaryContainer: {
-    backgroundColor: Colors.white,
-    marginVertical: normalize(10),
-    borderRadius: normalize(12),
-    padding: normalize(16),
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-  },
-  summaryTitle: {
-    fontSize: 20,
-    fontFamily: Fonts.MulishBold,
-    color: Colors.black,
-    textAlign: 'center',
-    marginBottom: normalize(16),
-  },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  summaryCard: {
-    width: '48%',
-    backgroundColor: Colors.white,
-    borderRadius: normalize(8),
-    padding: normalize(12),
-    marginBottom: normalize(12),
-    borderLeftWidth: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  summaryCardContent: { flex: 1 },
-  summaryCardTitle: {
-    fontSize: 12,
-    fontFamily: Fonts.MulishRegular,
-    color: Colors.black,
-    marginBottom: normalize(4),
-  },
-  summaryCardValue: {
-    fontSize: 18,
-    fontFamily: Fonts.MulishBold,
-  },
-  summaryIcon: {
-    width: normalize(32),
-    height: normalize(32),
-    borderRadius: normalize(16),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryIconText: {
-    fontSize: 16,
-    fontFamily: Fonts.MulishBold,
-  },
-  hoursProgressContainer: {
-    marginTop: normalize(4),
-  },
-  hoursProgressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: normalize(6),
-  },
-  hoursProgressLabel: {
-    fontSize: 12,
-    fontFamily: Fonts.MulishSemiBold,
-    color: Colors.black,
-  },
-  hoursProgressValue: {
-    fontSize: 12,
-    fontFamily: Fonts.MulishSemiBold,
-    color: '#9C27B0',
-  },
-  hoursProgressTrack: {
-    height: normalize(8),
-    backgroundColor: '#f0f0f0',
-    borderRadius: normalize(4),
-    overflow: 'hidden',
-  },
-  hoursProgressFill: {
-    height: '100%',
-    backgroundColor: '#9C27B0',
-    borderRadius: normalize(4),
+  scrollView: { flex: 1 },
+  scrollContent: {
+    padding: normalize(14),
+    paddingBottom: normalize(120),
+    gap: normalize(12),
   },
 
-  // ── Table ──
-  tableContainer: {
-    backgroundColor: Colors.white,
-    marginVertical: normalize(10),
-    borderRadius: normalize(12),
-    marginBottom: 100,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+  // ── Month selector ────────────────────────────────────────────────
+  monthRow: {
+    paddingHorizontal: normalize(14),
+    paddingTop: normalize(10),
+    alignItems: 'flex-end',
   },
-  tableTopSection: {
-    paddingHorizontal: normalize(16),
-    paddingVertical: normalize(16),
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray || '#e9ecef',
-  },
-  tableTitle: {
-    fontSize: 18,
-    fontFamily: Fonts.MulishBold,
-    color: Colors.black,
-  },
-  tableHeader: {
+  monthPill: {
     flexDirection: 'row',
-    backgroundColor: Colors.lightGray || '#f8f9fa',
-    paddingVertical: normalize(12),
-    paddingHorizontal: normalize(15),
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray || '#e9ecef',
-  },
-  headerText: {
-    fontSize: 14,
-    fontFamily: Fonts.MulishBold,
-    color: Colors.black,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  calendarFlatList: { flex: 1 },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: normalize(12),
-    paddingHorizontal: normalize(15),
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray || '#e9ecef',
     alignItems: 'center',
-  },
-  dateColumn: { flex: 1, justifyContent: 'center' },
-  statusColumn: { flex: 1, justifyContent: 'center', alignItems: 'flex-start' },
-  dateText: {
-    fontSize: 14,
-    fontFamily: Fonts.MulishSemiBold,
-    color: Colors.black,
-  },
-  descriptionText: {
-    fontSize: 11,
-    fontFamily: Fonts.MulishRegular,
-    color: '#888',
-    marginTop: 2,
-  },
-  statusBadge: {
+    gap: normalize(5),
+    backgroundColor: '#E6F1FB',
+    borderRadius: normalize(20),
     paddingHorizontal: normalize(12),
     paddingVertical: normalize(6),
-    borderRadius: normalize(16),
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
-  statusText: {
-    fontSize: 12,
-    fontFamily: Fonts.MulishBold,
-    color: Colors.white,
-    textTransform: 'capitalize',
+  monthPillText: {
+    fontSize: normalize(12),
+    fontFamily: Fonts.MulishSemiBold,
+    color: '#185FA5',
   },
+  monthPillArrow: { fontSize: normalize(10), color: '#185FA5' },
 
-  // ── Legend ──
-  legendContainer: {
-    padding: normalize(15),
-    backgroundColor: Colors.lightGray || '#f8f9fa',
-    borderTopWidth: 1,
-    borderTopColor: Colors.lightGray || '#e9ecef',
-    borderBottomLeftRadius: normalize(12),
-    borderBottomRightRadius: normalize(12),
+  // ── Summary card ─────────────────────────────────────────────────
+  summaryCard: {
+    backgroundColor: Colors.white,
+    borderRadius: normalize(16),
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.08)',
   },
-  legendTitle: {
-    fontSize: 14,
+  summaryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    padding: normalize(14),
+    paddingBottom: normalize(10),
+  },
+  overviewEyebrow: {
+    fontSize: normalize(11),
+    fontFamily: Fonts.MulishRegular,
+    color: Colors.gray || '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: normalize(2),
+  },
+  overviewMonth: {
+    fontSize: normalize(19),
     fontFamily: Fonts.MulishBold,
     color: Colors.black,
-    textAlign: 'center',
-    marginBottom: normalize(10),
   },
-  legendRow: {
+  onTrackBadge: {
+    backgroundColor: '#E1F5EE',
+    borderRadius: normalize(20),
+    paddingHorizontal: normalize(10),
+    paddingVertical: normalize(4),
+  },
+  onTrackText: {
+    fontSize: normalize(11),
+    fontFamily: Fonts.MulishSemiBold,
+    color: '#0F6E56',
+  },
+
+  statsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(0,0,0,0.07)',
+  },
+  statCell: {
+    width: '50%',
+    padding: normalize(12),
+    paddingLeft: normalize(14),
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.07)',
+  },
+  statIcon:  { fontSize: normalize(16), marginBottom: normalize(4) },
+  statValue: { fontSize: normalize(22), fontFamily: Fonts.MulishBold },
+  statLabel: {
+    fontSize: normalize(11),
+    fontFamily: Fonts.MulishRegular,
+    color: Colors.gray || '#666',
+    marginTop: normalize(1),
+  },
+
+  progressSection: {
+    padding: normalize(12),
+    paddingHorizontal: normalize(14),
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(0,0,0,0.07)',
+  },
+  progressHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: normalize(6),
   },
-  legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendColor: {
-    width: normalize(16),
-    height: normalize(16),
-    borderRadius: normalize(8),
-    marginRight: normalize(8),
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  legendText: {
-    fontSize: 12,
+  progressLabel: {
+    fontSize: normalize(12),
     fontFamily: Fonts.MulishRegular,
-    color: Colors.black,
+    color: Colors.gray || '#666',
   },
-
-  // ── Month Selector ──
-  topRightContainer: { marginTop: normalize(10) },
-  monthSelectorContainer: { alignItems: 'flex-end' },
-  monthSelectorButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    paddingHorizontal: normalize(12),
-    paddingVertical: normalize(8),
-    borderRadius: normalize(6),
-    borderWidth: 1,
-    borderColor: Colors.lightGray || '#e9ecef',
-    minWidth: normalize(120),
-  },
-  monthSelectorText: {
-    fontSize: 12,
+  progressValue: {
+    fontSize: normalize(12),
     fontFamily: Fonts.MulishSemiBold,
-    color: Colors.black,
-    flex: 1,
+    color: '#534AB7',
   },
-  monthSelectorArrow: {
-    fontSize: 10,
-    color: Colors.black,
-    marginLeft: normalize(4),
-  },
-
-  // ── Month Picker Modal ──
-  modalContainer: { justifyContent: 'center', alignItems: 'center', margin: 0 },
-  modalContent: {
-    backgroundColor: Colors.white,
-    borderRadius: normalize(12),
-    padding: normalize(20),
-    width: '90%',
-    maxHeight: '70%',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: Fonts.MulishBold,
-    color: Colors.black,
-    textAlign: 'center',
-    marginBottom: normalize(16),
-  },
-  monthOption: {
-    paddingVertical: normalize(12),
-    paddingHorizontal: normalize(16),
-    borderRadius: normalize(8),
-    marginBottom: normalize(8),
-  },
-  selectedMonthOption: { backgroundColor: Colors.lightBlue || '#e3f2fd' },
-  monthOptionText: {
-    fontSize: 16,
-    fontFamily: Fonts.MulishSemiBold,
-    color: Colors.black,
-  },
-  selectedMonthOptionText: { color: Colors.blue || '#2196F3' },
-  modalCloseButton: {
-    backgroundColor: Colors.blue || '#2196F3',
-    paddingVertical: normalize(12),
-    borderRadius: normalize(8),
-    marginTop: normalize(16),
-  },
-  modalCloseButtonText: {
-    fontSize: 16,
-    fontFamily: Fonts.MulishBold,
-    color: Colors.white,
-    textAlign: 'center',
-  },
-
-  // ── No Data ──
-  noDataContainer: { padding: normalize(20), alignItems: 'center' },
-  noDataText: {
-    textAlign: 'center',
-    fontSize: 16,
-    fontFamily: Fonts.MulishRegular,
-    color: Colors.black,
-  },
-  noDataMainContainer: {
-    backgroundColor: Colors.white,
-    borderRadius: 8,
-    marginTop: 80,
-    padding: 15,
-    alignItems: 'center',
-  },
-  noDataMainText: {
-    fontSize: 16,
-    fontFamily: Fonts.MulishSemiBold,
-    color: Colors.black,
-    textAlign: 'center',
-  },
-  noDataSubText: {
-    textAlign: 'center',
-    fontSize: 16,
-    fontFamily: Fonts.MulishRegular,
-    color: Colors.black,
-  },
-
-  // ── Compact Activity Modal ──
-  compactModalCard: {
-    backgroundColor: Colors.white,
-    borderRadius: normalize(16),
-    width: '95%',
-    maxHeight: '85%',
-    alignSelf: 'center',
+  progressTrack: {
+    height: normalize(6),
+    backgroundColor: '#ECECEC',
+    borderRadius: normalize(3),
     overflow: 'hidden',
   },
-  compactModalHeader: {
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#534AB7',
+    borderRadius: normalize(3),
+  },
+
+  // ── Section ───────────────────────────────────────────────────────
+  section: { gap: normalize(8) },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    fontSize: normalize(14),
+    fontFamily: Fonts.MulishBold,
+    color: Colors.black,
+  },
+  legendRow:  { flexDirection: 'row', gap: normalize(10) },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: normalize(4) },
+  legendDot:  { width: normalize(7), height: normalize(7), borderRadius: normalize(4) },
+  legendText: {
+    fontSize: normalize(11),
+    fontFamily: Fonts.MulishRegular,
+    color: Colors.gray || '#888',
+  },
+
+  // ── Day card ──────────────────────────────────────────────────────
+  dayCard: {
+    backgroundColor: Colors.white,
+    borderRadius: normalize(12),
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.07)',
+  },
+  dayStrip: { height: normalize(3) },
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: normalize(11),
+    paddingHorizontal: normalize(14),
+    gap: normalize(12),
+  },
+  dateBlock: { width: normalize(34), alignItems: 'center' },
+  dateNum: {
+    fontSize: normalize(17),
+    fontFamily: Fonts.MulishBold,
+    color: Colors.black,
+    lineHeight: normalize(20),
+  },
+  dateDay: {
+    fontSize: normalize(10),
+    fontFamily: Fonts.MulishRegular,
+    color: Colors.gray || '#888',
+    marginTop: normalize(1),
+  },
+  dayDivider: {
+    width: 0.5,
+    height: normalize(28),
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  dayInfo: { flex: 1 },
+  dayFullName: {
+    fontSize: normalize(13),
+    fontFamily: Fonts.MulishSemiBold,
+    color: Colors.black,
+  },
+  dayDesc: {
+    fontSize: normalize(11),
+    fontFamily: Fonts.MulishRegular,
+    color: Colors.gray || '#888',
+    marginTop: normalize(1),
+  },
+  statusBadge: {
+    borderRadius: normalize(20),
+    paddingHorizontal: normalize(10),
+    paddingVertical: normalize(4),
+  },
+  statusBadgeText: {
+    fontSize: normalize(11),
+    fontFamily: Fonts.MulishSemiBold,
+  },
+
+  // ── Month picker modal ────────────────────────────────────────────
+  modalWrap: { justifyContent: 'flex-end', margin: 0 },
+  pickerSheet: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: normalize(24),
+    borderTopRightRadius: normalize(24),
+    padding: normalize(20),
+    maxHeight: '70%',
+  },
+  sheetHandle: {
+    width: normalize(36),
+    height: normalize(4),
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: normalize(2),
+    alignSelf: 'center',
+    marginBottom: normalize(16),
+  },
+  pickerTitle: {
+    fontSize: normalize(16),
+    fontFamily: Fonts.MulishBold,
+    color: Colors.black,
+    textAlign: 'center',
+    marginBottom: normalize(12),
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: normalize(12),
+    paddingHorizontal: normalize(10),
+    borderRadius: normalize(8),
+  },
+  pickerOptionSelected: { backgroundColor: '#E6F1FB' },
+  pickerOptionText: {
+    fontSize: normalize(15),
+    fontFamily: Fonts.MulishSemiBold,
+    color: Colors.black,
+  },
+  pickerOptionTextSelected: { color: '#185FA5' },
+  pickerCheck: { fontSize: normalize(14), color: '#185FA5' },
+  pickerCloseBtn: {
+    backgroundColor: '#185FA5',
+    borderRadius: normalize(10),
+    paddingVertical: normalize(12),
+    marginTop: normalize(16),
+    alignItems: 'center',
+  },
+  pickerCloseBtnText: {
+    fontSize: normalize(15),
+    fontFamily: Fonts.MulishBold,
+    color: Colors.white,
+  },
+
+  // ── Activity bottom sheet ─────────────────────────────────────────
+  activitySheet: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: normalize(24),
+    borderTopRightRadius: normalize(24),
+    overflow: 'hidden',
+    paddingTop: normalize(10),
+  },
+  activityHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: normalize(16),
-    paddingTop: normalize(14),
+    paddingTop: normalize(4),
     paddingBottom: normalize(12),
     borderBottomWidth: 0.5,
-    borderBottomColor: Colors.lightGray || '#e9ecef',
+    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
-  compactModalDate: {
-    fontSize: 12,
+  activityDate: {
+    fontSize: normalize(11),
     fontFamily: Fonts.MulishRegular,
     color: Colors.gray || '#666',
   },
-  compactModalTitle: {
-    fontSize: 16,
+  activityTitle: {
+    fontSize: normalize(16),
     fontFamily: Fonts.MulishBold,
     color: Colors.black,
     marginTop: normalize(2),
   },
-  compactHeaderRight: {
+  activityHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: normalize(8),
   },
-  statusPill: {
-    paddingHorizontal: normalize(10),
-    paddingVertical: normalize(3),
-    borderRadius: normalize(20),
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontFamily: Fonts.MulishBold,
-  },
-  compactCloseBtn: {
+  closeIconBtn: {
     width: normalize(28),
     height: normalize(28),
     borderRadius: normalize(14),
-    backgroundColor: '#555555',        // ← darker bg so white text pops
+    backgroundColor: '#EBEBEB',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactCloseBtnText: {
-    fontSize: 18,
+  closeIconBtnText: {
+    fontSize: normalize(20),
+    color: Colors.black,
+    lineHeight: normalize(24),
     fontFamily: Fonts.MulishBold,
-    color: Colors.white,              // ← white ×
-    lineHeight: normalize(22),
   },
-  compactEmployeeRow: {
+
+  empRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: normalize(10),
+    padding: normalize(12),
     paddingHorizontal: normalize(16),
-    paddingVertical: normalize(14),
     borderBottomWidth: 0.5,
-    borderBottomColor: Colors.lightGray || '#e9ecef',
+    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
-  avatarCircle: {
+  avatar: {
     width: normalize(36),
     height: normalize(36),
     borderRadius: normalize(18),
-    backgroundColor: Colors.lightBlue || '#E6F1FB',
+    backgroundColor: '#E6F1FB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 13,
+    fontSize: normalize(13),
     fontFamily: Fonts.MulishBold,
-    color: Colors.blue || '#185FA5',
+    color: '#185FA5',
   },
-  compactEmployeeName: {
-    fontSize: 14,
+  empName: {
+    fontSize: normalize(14),
     fontFamily: Fonts.MulishBold,
     color: Colors.black,
   },
-  compactEmployeeRole: {
-    fontSize: 12,
+  empRole: {
+    fontSize: normalize(11),
     fontFamily: Fonts.MulishRegular,
     color: Colors.gray || '#666',
   },
+
   timeCardRow: {
     flexDirection: 'row',
     gap: normalize(8),
+    padding: normalize(12),
     paddingHorizontal: normalize(16),
-    paddingVertical: normalize(14),
     borderBottomWidth: 0.5,
-    borderBottomColor: Colors.lightGray || '#e9ecef',
+    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   timeCard: {
     flex: 1,
-    backgroundColor: Colors.bgColor || '#f8f9fa',
+    backgroundColor: '#F7F8FA',
     borderRadius: normalize(10),
     padding: normalize(12),
   },
+  timeCardDim: { opacity: 0.5 },
   timeCardLabel: {
-    fontSize: 11,
+    fontSize: normalize(10),
     fontFamily: Fonts.MulishRegular,
     color: Colors.gray || '#888',
-    marginBottom: normalize(4),
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   timeCardValue: {
-    fontSize: 16,
+    fontSize: normalize(17),
     fontFamily: Fonts.MulishBold,
     color: Colors.black,
+    marginTop: normalize(4),
+    marginBottom: normalize(2),
   },
   timeCardSub: {
-    fontSize: 11,
+    fontSize: normalize(10),
     fontFamily: Fonts.MulishRegular,
     color: Colors.gray || '#888',
-    marginTop: normalize(3),
   },
+
   photoSection: {
     paddingHorizontal: normalize(16),
-    paddingTop: normalize(14),
+    paddingTop: normalize(12),
     paddingBottom: normalize(4),
     borderBottomWidth: 0.5,
-    borderBottomColor: Colors.lightGray || '#e9ecef',
+    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
-  photoSectionLabel: {
-    fontSize: 11,
+  photoLabel: {
+    fontSize: normalize(11),
     fontFamily: Fonts.MulishBold,
     color: Colors.gray || '#888',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: normalize(8),
   },
-  compactPhoto: {
+  photo: {
     width: '100%',
     height: normalize(150),
     borderRadius: normalize(10),
-    marginBottom: normalize(10),
-    backgroundColor: Colors.lightGray || '#f0f0f0',
+    marginBottom: normalize(12),
+    backgroundColor: '#EBEBEB',
   },
-  compactFooter: {
+
+  activityFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    padding: normalize(12),
     paddingHorizontal: normalize(16),
-    paddingVertical: normalize(12),
   },
-  compactFooterText: {
-    fontSize: 12,
+  activityFooterText: {
+    fontSize: normalize(12),
     fontFamily: Fonts.MulishRegular,
     color: Colors.gray || '#666',
   },
-  compactFooterValue: {
+  activityFooterVal: {
     fontFamily: Fonts.MulishBold,
     color: Colors.black,
   },
-  compactFooterBtn: {
-    paddingHorizontal: normalize(14),
-    paddingVertical: normalize(6),
+  doneBtn: {
+    backgroundColor: '#185FA5',
     borderRadius: normalize(8),
-    backgroundColor: Colors.blue || '#2196F3',  // ← solid blue, matches month picker close
+    paddingHorizontal: normalize(16),
+    paddingVertical: normalize(7),
   },
-  compactFooterBtnText: {
-    fontSize: 12,
+  doneBtnText: {
+    fontSize: normalize(12),
     fontFamily: Fonts.MulishSemiBold,
-    color: Colors.white,                         // ← white text on blue
+    color: Colors.white,
+  },
+
+  // ── Empty state ───────────────────────────────────────────────────
+  emptyState: {
+    backgroundColor: Colors.white,
+    borderRadius: normalize(16),
+    padding: normalize(32),
+    alignItems: 'center',
+    marginTop: normalize(60),
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.07)',
+  },
+  emptyTitle: {
+    fontSize: normalize(15),
+    fontFamily: Fonts.MulishSemiBold,
+    color: Colors.black,
+    textAlign: 'center',
+    marginBottom: normalize(6),
+  },
+  emptySubtitle: {
+    fontSize: normalize(13),
+    fontFamily: Fonts.MulishRegular,
+    color: Colors.gray || '#888',
+    textAlign: 'center',
   },
 });
